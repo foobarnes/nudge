@@ -1,7 +1,8 @@
 import SwiftUI
 
-// 26pt circular icon buttons for row actions and panel headers, with a custom mini label after 600ms hover
-// (system tooltips don't show for inactive apps).
+// 28pt icon buttons for row actions and panel headers. While the pointer is over one, the row shows the button's
+// name in place of its subtitle (`ActionLabel`), so nothing ever floats over a control; system tooltips don't show
+// for inactive apps anyway.
 //
 // Every control here is `.focusable(false)`: the pill panel never takes keyboard focus, and with Full Keyboard
 // Access on, SwiftUI's key-view-loop rebuild for a list of focusable buttons in that panel never returned
@@ -11,27 +12,47 @@ enum IconRole { case normal, accent, secondary }
 
 enum SplitSide { case whole, leading, trailing }
 
+/// The name of the action button under the pointer, shown by the row in place of its subtitle.
+@MainActor @Observable
+final class ActionLabel {
+    var text: String?
+    nonisolated init() {}
+}
+
+extension EnvironmentValues {
+    @Entry var actionLabel: ActionLabel? = nil
+}
+
 struct IconButtonStyle: ButtonStyle {
+    static let height: CGFloat = 28
+    static let mainWidth: CGFloat = 30
+    static let chevronWidth: CGFloat = 20
+
     var role: IconRole = .normal
     var side: SplitSide = .whole
-    var width: CGFloat = 26
     @State private var hovered = false
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .font(.system(size: 12, weight: .semibold))
+            .font(.system(size: side == .trailing ? 9 : 12.5, weight: side == .trailing ? .heavy : .semibold))
             .foregroundStyle(glyph)
-            .frame(width: width, height: 26)
+            .frame(width: width, height: Self.height)
             .background(fill(configuration.isPressed), in: shape)
-            .overlay { shape.strokeBorder(.white.opacity(role == .accent ? 0.18 : 0.25), lineWidth: 0.5) }
-            .padding(1)
-            .contentShape(Rectangle())
+            .contentShape(shape)
             .onHover { hovered = $0 }
             .animation(.easeOut(duration: 0.15), value: hovered)
     }
 
+    private var width: CGFloat {
+        switch side {
+        case .whole: Self.height
+        case .leading: Self.mainWidth
+        case .trailing: Self.chevronWidth
+        }
+    }
+
     private var shape: UnevenRoundedRectangle {
-        let r: CGFloat = 13
+        let r = Self.height / 2
         let leading = side != .trailing, trailing = side != .leading
         return UnevenRoundedRectangle(topLeadingRadius: leading ? r : 0, bottomLeadingRadius: leading ? r : 0,
                                       bottomTrailingRadius: trailing ? r : 0, topTrailingRadius: trailing ? r : 0)
@@ -45,10 +66,16 @@ struct IconButtonStyle: ButtonStyle {
         }
     }
 
+    /// Only Start is filled blue; its chevron segment is a lighter blue so it reads as the same button. Neutral
+    /// fills use the row's foreground at ~11% so they still read on a tinted amber or red row.
     private func fill(_ pressed: Bool) -> Color {
+        let active = pressed || hovered
         switch role {
-        case .accent: pressed || hovered ? Color(hex: 0x0858BB) : Tokens.Palette.accent
-        case .normal, .secondary: pressed || hovered ? Tokens.Palette.fillStrong : Tokens.Palette.fillHover
+        case .accent:
+            let base = active ? Color(hex: 0x0858BB) : Tokens.Palette.accent
+            return side == .trailing ? base.opacity(0.8) : base
+        case .normal, .secondary:
+            return Tokens.Palette.text.opacity(pressed ? 0.22 : hovered ? 0.17 : 0.11)
         }
     }
 }
@@ -64,12 +91,12 @@ struct IconButton: View {
         Button(action: action) { Image(systemName: symbol) }
             .buttonStyle(IconButtonStyle(role: role, side: side))
             .focusable(false)
-            .miniLabel(label)
+            .actionLabel(label)
             .accessibilityLabel(label)
     }
 }
 
-/// Icon button whose attached ⌄ segment opens a menu.
+/// Icon button whose attached ⌄ segment opens a menu. One pill: main part, hairline, chevron part.
 struct SplitIconMenuButton<MenuContent: View>: View {
     let symbol: String
     let label: String
@@ -81,13 +108,14 @@ struct SplitIconMenuButton<MenuContent: View>: View {
     var body: some View {
         HStack(spacing: 0) {
             IconButton(symbol: symbol, label: label, role: role, side: .leading, action: action)
-            Menu { menu } label: { Image(systemName: "chevron.down").font(.system(size: 8, weight: .heavy)) }
+            SplitDivider(role: role)
+            Menu { menu } label: { Image(systemName: "chevron.down") }
                 .menuStyle(.button)
-                .buttonStyle(IconButtonStyle(role: role, side: .trailing, width: 14))
+                .buttonStyle(IconButtonStyle(role: role, side: .trailing))
                 .menuIndicator(.hidden)
                 .focusable(false)
                 .fixedSize()
-                .miniLabel(menuLabel)
+                .actionLabel(menuLabel)
                 .accessibilityLabel(menuLabel)
         }
     }
@@ -106,61 +134,41 @@ struct SplitIconPopoverButton<Popover: View>: View {
     var body: some View {
         HStack(spacing: 0) {
             IconButton(symbol: symbol, label: label, role: role, side: .leading, action: action)
-            Button { isPresented.toggle() } label: { Image(systemName: "chevron.down").font(.system(size: 8, weight: .heavy)) }
-                .buttonStyle(IconButtonStyle(role: role, side: .trailing, width: 14))
+            SplitDivider(role: role)
+            Button { isPresented.toggle() } label: { Image(systemName: "chevron.down") }
+                .buttonStyle(IconButtonStyle(role: role, side: .trailing))
                 .focusable(false)
-                .miniLabel(menuLabel)
+                .actionLabel(menuLabel)
                 .accessibilityLabel(menuLabel)
                 .popover(isPresented: $isPresented, arrowEdge: .bottom) { popover }
         }
     }
 }
 
+/// 1pt hairline between the halves of a split button.
+private struct SplitDivider: View {
+    let role: IconRole
+
+    var body: some View {
+        Rectangle()
+            .fill(role == .accent ? Color.white.opacity(0.35) : Tokens.Palette.text.opacity(0.14))
+            .frame(width: 1, height: IconButtonStyle.height)
+    }
+}
+
 extension View {
-    func miniLabel(_ text: String) -> some View { modifier(MiniLabelModifier(text: text)) }
+    /// Reports `text` to the enclosing row's `ActionLabel` while hovered.
+    func actionLabel(_ text: String) -> some View { modifier(ActionLabelModifier(text: text)) }
 }
 
-extension EnvironmentValues {
-    /// Forces the mini label with this text visible (previews and the gallery).
-    @Entry public var visibleMiniLabel: String?
-}
-
-private struct MiniLabelModifier: ViewModifier {
+private struct ActionLabelModifier: ViewModifier {
     let text: String
-    @Environment(\.visibleMiniLabel) private var forced
-    @State private var hovered = false
-    @State private var task: Task<Void, Never>?
-
-    private var shown: Bool { hovered || forced == text }
+    @Environment(\.actionLabel) private var label
 
     func body(content: Content) -> some View {
-        content
-            .onHover { inside in
-                task?.cancel()
-                if inside {
-                    task = Task {
-                        try? await Task.sleep(for: .milliseconds(600))
-                        if !Task.isCancelled { hovered = true }
-                    }
-                } else {
-                    hovered = false
-                }
-            }
-            .overlay(alignment: .bottom) {
-                if shown {
-                    Text(text)
-                        .font(Tokens.Typo.caption)
-                        .foregroundStyle(Tokens.Palette.text)
-                        .padding(.horizontal, 7).padding(.vertical, 3)
-                        .background(.regularMaterial, in: Capsule())
-                        .overlay { Capsule().strokeBorder(Tokens.Palette.hairline, lineWidth: 0.5) }
-                        .fixedSize()
-                        .alignmentGuide(.bottom) { $0[.top] - 4 }
-                        .allowsHitTesting(false)
-                        .transition(.opacity.combined(with: .scale(scale: 0.9, anchor: .top)))
-                }
-            }
-            .animation(.easeOut(duration: 0.15), value: shown)
-            .zIndex(shown ? 1 : 0)
+        content.onHover { inside in
+            guard let label else { return }
+            if inside { label.text = text } else if label.text == text { label.text = nil }
+        }
     }
 }

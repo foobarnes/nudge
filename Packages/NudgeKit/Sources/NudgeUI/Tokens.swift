@@ -123,7 +123,7 @@ enum Tokens {
 
     enum Size {
         static let pillHeight: CGFloat = 46
-        static let panelWidth: CGFloat = 380
+        static let panelWidth: CGFloat = 420   // room for the subtitle beside the 28pt action cluster
         static let panelMaxHeight: CGFloat = 440
         static let dot: CGFloat = 11
         static let buttonHeight: CGFloat = 26
@@ -134,8 +134,9 @@ enum Tokens {
     enum Space {
         static let panelInset: CGFloat = 10
         static let rowH: CGFloat = 12
-        static let rowV: CGFloat = 5
+        static let rowV: CGFloat = 6
         static let rowGap: CGFloat = 10
+        static let rowLines: CGFloat = 8       // between the timer line and the action line
         static let actionsGap: CGFloat = 6
     }
 }
