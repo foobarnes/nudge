@@ -191,6 +191,8 @@ public final class NudgeState {
     /// Incremented once per new-request banner; views bounce on change.
     public var newRequestPulse = 0
     public var resultsCapped = false           // "200+ results — some may be missing"
+    /// Non-fatal sync notice shown in the footer while rows still display, e.g. SAML SSO gaps.
+    public var notice: SyncProblem?
 
     // Pill chrome (written by the shell).
     public var pillExpanded = false
@@ -214,6 +216,10 @@ public struct NudgeIntents {
     public var updateSettings: @MainActor (_ change: (inout NudgeSettings) -> Void) -> Void
     public var openSettings: @MainActor () -> Void
     public var quit: @MainActor () -> Void
+    /// Opens the menu bar dropdown (from the pill's context menu).
+    public var openDropdown: @MainActor () -> Void = {}
+    /// Hides the floating pill until the next new request (display mode is unchanged).
+    public var dismissPill: @MainActor () -> Void = {}
 
     public init(open: @escaping @MainActor (PRRow) -> Void = { _ in },
                 startReview: @escaping @MainActor (PRRow, ReviewAction.ID?) -> Void = { _, _ in },
