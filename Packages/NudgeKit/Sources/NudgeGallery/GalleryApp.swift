@@ -3,8 +3,10 @@ import NudgeCore
 import NudgeUI
 import SwiftUI
 
-// Dev harness: `swift run NudgeGallery [-scene <name>] [-dark] [-shot] [-fast]`.
+// Dev harness: `swift run NudgeGallery [-scene <name>] [-dark] [-shot] [-fast] [-slow] [-notKey]`.
 // Prints "WINDOW <number>" once shown, for `screencapture -l <number>`. Menus and popovers are opened by hand.
+// `-slow` runs the pill morph at 1/8 speed (frame inspection); `-notKey` hands key status to a helper window so
+// glass can be compared key vs. not key. The morph* scenes toggle the pill every 2.5s in each anchor corner.
 
 @main
 struct GalleryApp: App {
@@ -27,8 +29,20 @@ enum Scene: String, CaseIterable, Identifiable {
     case dropdown, dropdownSnoozed, dropdownEmpty, dropdownAuthError, dropdownNotice
     case rowRest, rowHovered, rowHoveredLabels, hoverCards, workTimePopover, snoozeMenu
     case settingsGeneral, settingsNotifications, settingsActions, settingsAbout
+    case morphTopTrailing, morphTopLeading, morphBottomTrailing, morphBottomLeading
 
     var id: String { rawValue }
+
+    var isMorph: Bool { rawValue.hasPrefix("morph") }
+
+    var anchor: Alignment {
+        switch self {
+        case .morphTopLeading: .topLeading
+        case .morphBottomTrailing: .bottomTrailing
+        case .morphBottomLeading, .pillExpandedBottom: .bottomLeading
+        default: .topTrailing
+        }
+    }
 
     static var initial: Scene {
         let name = UserDefaults.standard.string(forKey: "scene") ?? ""
@@ -37,7 +51,8 @@ enum Scene: String, CaseIterable, Identifiable {
 
     var size: CGSize {
         switch self {
-        case .pillExpanded, .pillExpandedBottom, .pillExpandedSnoozed, .pillExpandedNotice: CGSize(width: 520, height: 540)
+        case .pillExpanded, .pillExpandedBottom, .pillExpandedSnoozed, .pillExpandedNotice,
+             .morphTopTrailing, .morphTopLeading, .morphBottomTrailing, .morphBottomLeading: CGSize(width: 520, height: 540)
         case .dropdown, .dropdownSnoozed, .dropdownEmpty, .dropdownAuthError, .dropdownNotice: CGSize(width: 460, height: 660)
         case .rowRest, .rowHovered, .rowHoveredLabels: CGSize(width: 460, height: 200)
         case .hoverCards: CGSize(width: 460, height: 440)
@@ -47,8 +62,10 @@ enum Scene: String, CaseIterable, Identifiable {
         }
     }
 
+    /// Dark wallpaper for the settings scenes, off hours, and every scene under `-dark` so dark-mode contrast is real.
     var wallpaperIsDark: Bool {
-        switch self {
+        if ProcessInfo.processInfo.arguments.contains("-dark") { return true }
+        return switch self {
         case .settingsGeneral, .settingsNotifications, .settingsActions, .settingsAbout, .pillOffHours: true
         default: false
         }
@@ -72,7 +89,18 @@ struct GalleryView: View {
             .opacity(ProcessInfo.processInfo.arguments.contains("-shot") ? 0 : 1)
         }
         .frame(width: scene.size.width, height: scene.size.height)
+        .environment(\.pillMotionScale, ProcessInfo.processInfo.arguments.contains("-slow") ? 8 : 1)
         .onChange(of: scene, initial: true) { _, scene in state = Self.state(for: scene) }
+        .task(id: scene) {
+            guard scene.isMorph else { return }
+            let slow = ProcessInfo.processInfo.arguments.contains("-slow")
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .milliseconds(slow ? 20_000 : 2500))
+                state.pillExpanded.toggle()
+                print("TOGGLE expanded=\(state.pillExpanded)")   // frame captures are timed from this line
+                fflush(stdout)
+            }
+        }
     }
 
     @ViewBuilder private var content: some View {
@@ -80,9 +108,13 @@ struct GalleryView: View {
         case .pillMixed, .pillFresh, .pillAmber, .pillRed, .pillTeam, .pillOffHours, .pillStale, .pillAuthError,
              .pillAllClear, .pillCheck, .pillDimmed, .pillLoading, .pillExpanded, .pillExpandedBottom,
              .pillExpandedSnoozed, .pillExpandedNotice:
-            PillView(state: state, intents: intents)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: scene == .pillExpandedBottom ? .bottomTrailing : .topTrailing)
-                .padding(8)
+            PillView(state: state, intents: intents, anchor: scene.anchor)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: scene.anchor)
+                .padding(24)
+        case .morphTopTrailing, .morphTopLeading, .morphBottomTrailing, .morphBottomLeading:
+            PillView(state: state, intents: intents, anchor: scene.anchor)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: scene.anchor)
+                .padding(24)
         case .dropdown, .dropdownSnoozed, .dropdownEmpty, .dropdownAuthError, .dropdownNotice:
             DropdownView(state: state, intents: intents).padding(8)
         case .rowRest, .rowHovered, .rowHoveredLabels:
@@ -162,9 +194,9 @@ struct GalleryView: View {
         case .pillExpanded:
             s = .sample(.mixed)
             s.pillExpanded = true
-        case .pillExpandedBottom:
+        case .pillExpandedBottom, .morphBottomTrailing, .morphBottomLeading:
             s = .sample(.mixed)
-            s.pillExpanded = true
+            s.pillExpanded = scene == .pillExpandedBottom
             s.pillEdge = .bottom
         case .pillExpandedSnoozed:
             s = .sample(.snoozed)
@@ -210,6 +242,7 @@ extension Color {
 @MainActor
 final class GalleryDelegate: NSObject, NSApplicationDelegate {
     private var installed = false
+    private var keyHolder: NSWindow?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.regular)
@@ -225,6 +258,14 @@ final class GalleryDelegate: NSObject, NSApplicationDelegate {
             try? await Task.sleep(for: .milliseconds(ProcessInfo.processInfo.arguments.contains("-fast") ? 250 : 700))
             guard let window = NSApp.windows.first(where: { $0.isVisible }) else { return }
             window.makeKeyAndOrderFront(nil)
+            if ProcessInfo.processInfo.arguments.contains("-notKey") {
+                // A helper window takes key status so the gallery window renders its glass as inactive.
+                let helper = NSWindow(contentRect: NSRect(x: window.frame.minX, y: window.frame.minY - 60, width: 120, height: 40),
+                                      styleMask: [.titled], backing: .buffered, defer: false)
+                helper.title = "key holder"
+                helper.makeKeyAndOrderFront(nil)
+                keyHolder = helper
+            }
             let fast = ProcessInfo.processInfo.arguments.contains("-fast")
             try? await Task.sleep(for: .milliseconds(fast ? 150 : 1200))
             print("WINDOW \(window.windowNumber)")

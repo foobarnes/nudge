@@ -18,6 +18,11 @@ enum Tokens {
         static let sparkle = Color(hex: 0xFFB800)
         static let check = Color(hex: 0x1F9D55)
         static let warning = dynamic(light: 0xA84D07, dark: 0xFFB35C)
+        /// Sits between the glass and the pill's content: lifts light glass a little, darkens dark glass so the
+        /// tier colors hold contrast on any wallpaper.
+        static let glassScrim = dynamic(light: .white, 0.16, dark: .black, 0.30)
+        /// Under the hero timer and count in dark mode only.
+        static let textShadow = dynamic(light: .clear, 0, dark: .black, 0.45)
 
         // Settings window is dark glass in both appearances.
         static let settingsText = Color(hex: 0xF5F5F7)
@@ -103,7 +108,7 @@ enum Tokens {
 
     enum Radius {
         static let pill: CGFloat = 23
-        static let panel: CGFloat = 26
+        static let panel: CGFloat = 26   // Motion board: capsule radius 23 → card radius 26
         static let dropdown: CGFloat = 18
         static let row: CGFloat = 14
         static let button: CGFloat = 8

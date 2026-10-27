@@ -2,6 +2,10 @@ import SwiftUI
 
 // 26pt circular icon buttons for row actions and panel headers, with a custom mini label after 600ms hover
 // (system tooltips don't show for inactive apps).
+//
+// Every control here is `.focusable(false)`: the pill panel never takes keyboard focus, and with Full Keyboard
+// Access on, SwiftUI's key-view-loop rebuild for a list of focusable buttons in that panel never returned
+// (100% CPU as soon as the pill expanded). The dropdown navigates rows with arrow keys on its focused root instead.
 
 enum IconRole { case normal, accent, secondary }
 
@@ -59,6 +63,7 @@ struct IconButton: View {
     var body: some View {
         Button(action: action) { Image(systemName: symbol) }
             .buttonStyle(IconButtonStyle(role: role, side: side))
+            .focusable(false)
             .miniLabel(label)
             .accessibilityLabel(label)
     }
@@ -80,6 +85,7 @@ struct SplitIconMenuButton<MenuContent: View>: View {
                 .menuStyle(.button)
                 .buttonStyle(IconButtonStyle(role: role, side: .trailing, width: 14))
                 .menuIndicator(.hidden)
+                .focusable(false)
                 .fixedSize()
                 .miniLabel(menuLabel)
                 .accessibilityLabel(menuLabel)
@@ -102,6 +108,7 @@ struct SplitIconPopoverButton<Popover: View>: View {
             IconButton(symbol: symbol, label: label, role: role, side: .leading, action: action)
             Button { isPresented.toggle() } label: { Image(systemName: "chevron.down").font(.system(size: 8, weight: .heavy)) }
                 .buttonStyle(IconButtonStyle(role: role, side: .trailing, width: 14))
+                .focusable(false)
                 .miniLabel(menuLabel)
                 .accessibilityLabel(menuLabel)
                 .popover(isPresented: $isPresented, arrowEdge: .bottom) { popover }
