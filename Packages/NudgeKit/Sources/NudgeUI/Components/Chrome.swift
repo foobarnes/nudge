@@ -181,6 +181,8 @@ struct TimerText: View {
     var live = false
     var font: Font = Tokens.Typo.rowTimer
     var tracking: CGFloat = -0.36
+    /// Stale sync: keeps counting in the secondary color (States board).
+    var greyed = false
 
     var body: some View {
         TimelineView(.periodic(from: .now, by: live ? 1 : 60)) { context in
@@ -189,7 +191,8 @@ struct TimerText: View {
         .font(font)
         .monospacedDigit()
         .tracking(tracking)
-        .foregroundStyle(Tokens.Tier.text(tier))
+        .foregroundStyle(greyed ? Tokens.Palette.secondary : Tokens.Tier.text(tier))
+        .shadow(color: Tokens.Palette.textShadow, radius: 1.5, y: 0.5)
         .contentTransition(.numericText())
         .motion(Motion.roll, value: live)
         .motion(Motion.tint, value: tier)

@@ -25,7 +25,7 @@ final class PillController: NSObject, NSWindowDelegate {
     static let margin: CGFloat = 14          // transparent room around the content for the glass shadow
     private static let inset: CGFloat = 12   // visible gap between the pill and the screen edge
     private static let positionsKey = "pillPositions"
-    private static let settleDelay = 0.45    // after the morph animation, shrink the window to the content
+    private static let settleDelay = 0.45    // after a content change animates, fit the window to the content
 
     private let state: NudgeState
     private let statusItemScreen: @MainActor () -> NSScreen?
@@ -37,8 +37,14 @@ final class PillController: NSObject, NSWindowDelegate {
     private var trailing = true
     private var top = true
     private var screenUUID: String?
-    private var contentSize = CGSize(width: 150, height: 40)
+    /// Natural sizes of the pill in both states, reported by `PillView`.
+    private var sizes = PillSizes()
     private var placed = false
+    /// What the window should fit right now (the pill's state, not the morph in flight).
+    private var contentSize: CGSize {
+        let size = state.pillExpanded ? sizes.expanded : sizes.collapsed
+        return size.width > 0 && size.height > 0 ? size : CGSize(width: 150, height: 40)
+    }
 
     private var menuOpen = false
     private var hoverSuppressed = false
@@ -53,6 +59,7 @@ final class PillController: NSObject, NSWindowDelegate {
     private var drag: Drag?
     private var testingHold = false
     private var exitTask: Task<Void, Never>?
+    private var entryTask: Task<Void, Never>?
     private var resizeTask: Task<Void, Never>?
     private var settleTask: Task<Void, Never>?
     private var dimTask: Task<Void, Never>?
@@ -80,7 +87,7 @@ final class PillController: NSObject, NSWindowDelegate {
         host.onEnter = { [weak self] in self?.mouseEntered() }
         host.onExit = { [weak self] in self?.mouseExited() }
         let hosting = makeHostingView(PillHost(state: state, intents: intents, chrome: chrome) { [weak self] in
-            self?.contentSizeChanged($0)
+            self?.sizesChanged($0)
         })
         hosting.frame = host.bounds
         hosting.autoresizingMask = [.width, .height]
@@ -241,12 +248,28 @@ final class PillController: NSObject, NSWindowDelegate {
     private func mouseEntered() {
         exitTask?.cancel()
         guard panel.isVisible, !hoverSuppressed else { return }
+        // While a collapse settles the window is still card-sized; only the capsule itself expands the pill.
+        if !state.pillExpanded, !capsuleContains(NSEvent.mouseLocation) {
+            entryTask?.cancel()
+            entryTask = Task { [weak self] in
+                while let self, !Task.isCancelled, self.panel.frame.contains(NSEvent.mouseLocation) {
+                    if self.capsuleContains(NSEvent.mouseLocation) { self.setExpanded(true); return }
+                    try? await Task.sleep(for: .milliseconds(50))
+                }
+            }
+            return
+        }
         setExpanded(true)
+    }
+
+    private func capsuleContains(_ point: NSPoint) -> Bool {
+        contentFrame(for: sizes.collapsed).insetBy(dx: -4, dy: -4).contains(point)
     }
 
     /// Resizing rebuilds the tracking area and can emit a spurious exit; debounce and confirm with the cursor.
     private func mouseExited() {
         exitTask?.cancel()
+        entryTask?.cancel()
         exitTask = after(0.15) { [weak self] in
             guard let self, !self.mouseInside else { return }
             self.hoverSuppressed = false
@@ -281,14 +304,18 @@ final class PillController: NSObject, NSWindowDelegate {
             scheduleDim()
         }
         guard state.pillExpanded != expanded else { return }
+        settleTask?.cancel()
+        resizeTask?.cancel()
         if expanded {
-            // Make room before the card lays out, so its first frames aren't clipped by the collapsed window.
-            settleTask?.cancel()
-            resizeTask?.cancel()
-            let room = CGSize(width: 380 + 2 * 16, height: 440 + 2 * 16 + 40)   // PillView panel size + its padding + chip
-            panel.setFrame(panel.frame.union(windowFrame(for: room)), display: true)
+            // Size the (clear) window to the card first, anchored at `corner`, so the morph never touches the
+            // window and the capsule's corner stays put. `PillView` animates the shape and content itself.
+            panel.setFrame(windowFrame(for: sizes.expanded), display: false)
+            state.pillExpanded = true
+        } else {
+            state.pillExpanded = false
+            // Shrink only once the collapse morph has landed back on the capsule.
+            settleTask = after(PillView.collapseDuration(reduceMotion: reduceMotion)) { [weak self] in self?.settle() }
         }
-        withAnimation(reduceMotion ? nil : .spring(duration: 0.35)) { state.pillExpanded = expanded }
     }
 
     /// Gives keyboard focus back to the frontmost app: a key window that can no longer be key drops it on reorder.
@@ -319,14 +346,15 @@ final class PillController: NSObject, NSWindowDelegate {
 
     // MARK: Size and placement
 
-    /// Grow at once so a morph never clips; shrink only after the animation settles, so the frame never changes
-    /// under the cursor mid-morph. The content stays pinned to `corner` throughout.
+    /// Content changed size (a row came or went, the count grew): grow at once so nothing clips, shrink after the
+    /// change has animated. Morphs never come through here; `setExpanded` sizes the window for them.
     ///
-    /// Called from inside SwiftUI's layout pass: resizing the window synchronously here re-enters
+    /// Reported from inside SwiftUI's layout pass: resizing the window synchronously here re-enters
     /// `NSHostingView.layout()`, so the resize is deferred to the next run-loop turn.
-    private func contentSizeChanged(_ size: CGSize) {
-        guard size.width > 0, size.height > 0, size != contentSize else { return }
-        contentSize = size
+    private func sizesChanged(_ new: PillSizes) {
+        guard new != sizes else { return }
+        sizes = new
+        guard placed else { return }
         resizeTask?.cancel()
         resizeTask = after(0) { [weak self] in self?.grow() }
     }
@@ -335,14 +363,14 @@ final class PillController: NSObject, NSWindowDelegate {
         let target = windowFrame(for: contentSize)
         let current = panel.frame
         if target.width > current.width || target.height > current.height {
-            panel.setFrame(current.union(target), display: true)
+            panel.setFrame(current.union(target), display: false)
         }
         settleTask?.cancel()
         settleTask = after(Self.settleDelay) { [weak self] in self?.settle() }
     }
 
     private func settle() {
-        panel.setFrame(windowFrame(for: contentSize), display: true)
+        panel.setFrame(windowFrame(for: contentSize), display: false)
         collapseIfOutside()
     }
 
@@ -380,8 +408,8 @@ final class PillController: NSObject, NSWindowDelegate {
         corner = clampedCorner(in: vf)
         chrome.alignment = alignment
         settleTask?.cancel()
+        placed = true   // before the first setFrame: its layout reports the pill's sizes, which must then apply
         panel.setFrame(windowFrame(for: contentSize), display: true)
-        placed = true
     }
 
     private var alignment: Alignment {
@@ -465,17 +493,19 @@ final class PillController: NSObject, NSWindowDelegate {
     }
 }
 
-/// Pins `PillView` to the anchored corner so the window can grow and shrink around it without the content moving.
+/// Pins `PillView` to the anchored corner inside a root that fills the window, so the window can be sized around
+/// it without the content moving; `PillView` reports its collapsed and expanded sizes for that.
 private struct PillHost: View {
     let state: NudgeState
     let intents: NudgeIntents
     let chrome: PillChrome
-    let onSize: @MainActor (CGSize) -> Void
+    let onSize: @MainActor (PillSizes) -> Void
 
     var body: some View {
-        MeasuredContent(alignment: chrome.alignment, margin: PillController.margin, onSize: onSize) {
-            PillView(state: state, intents: intents)
-        }
+        PillView(state: state, intents: intents, anchor: chrome.alignment)
+            .onPreferenceChange(PillSizesKey.self) { sizes in MainActor.assumeIsolated { onSize(sizes) } }
+            .padding(PillController.margin)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: chrome.alignment)
     }
 }
 

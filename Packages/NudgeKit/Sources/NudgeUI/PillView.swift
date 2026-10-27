@@ -1,53 +1,136 @@
 import NudgeCore
 import SwiftUI
 
-/// The floating widget: a tier-tinted glass capsule that morphs into the request list when `state.pillExpanded`.
+/// Natural sizes of the pill in both states, so the shell can size its window before and after a morph.
+public struct PillSizes: Equatable, Sendable {
+    public var collapsed: CGSize = .zero
+    public var expanded: CGSize = .zero
+    public init() {}
+}
+
+public struct PillSizesKey: PreferenceKey {
+    public static let defaultValue = PillSizes()
+    public static func reduce(value: inout PillSizes, nextValue: () -> PillSizes) { value = nextValue() }
+}
+
+extension EnvironmentValues {
+    /// Multiplies every morph duration (the gallery slows the morph down to inspect frames).
+    @Entry public var pillMotionScale: Double = 1
+}
+
+/// The floating widget: one glass shape, pinned to its anchored corner, whose size and corner radius morph
+/// between a capsule and the request card. Both contents are laid out at their final size and revealed
+/// through the clip, so nothing reflows mid-morph.
 public struct PillView: View {
     private let state: NudgeState
     private let intents: NudgeIntents
-    @Namespace private var glass
+    private let anchor: Alignment
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.pillMotionScale) private var motionScale
     @State private var zero: ZeroPhase = .idle
     @State private var cards = HoverCardCoordinator()
+    @State private var collapsedSize = CGSize.zero
+    @State private var expandedSize = CGSize.zero
+    @State private var chipHeight: CGFloat = 0
 
     private enum ZeroPhase { case idle, sparkle, settled }
 
-    public init(state: NudgeState, intents: NudgeIntents) {
+    /// `anchor` is the screen corner the pill is pinned to; the shape grows away from it in both axes.
+    public init(state: NudgeState, intents: NudgeIntents, anchor: Alignment = .topTrailing) {
         self.state = state
         self.intents = intents
+        self.anchor = anchor
     }
+
+    /// Seconds from `pillExpanded = false` until the collapse morph has finished (the shell shrinks its window then).
+    public static func collapseDuration(reduceMotion: Bool) -> Double { MorphTiming.collapseDuration(reduced: reduceMotion) }
 
     private var oldestTier: Tier? { state.oldest?.tier }
     private var hasRows: Bool { !state.rows.isEmpty }
     private var expanded: Bool { state.pillExpanded && hasRows }
+    private var anchoredAtBottom: Bool { anchor.vertical == .bottom }
+    private var hiddenAtZero: Bool { zero == .settled && state.settings.displayMode != .widgetAlways }
 
     public var body: some View {
-        GlassEffectContainer(spacing: 16) {
-            VStack(alignment: horizontalAlignment, spacing: 8) {
-                if state.pillEdge == .bottom { staleChip }
-                if expanded {
-                    expandedList
-                        .glassEffect(.regular.tint(Tokens.Tier.tint(oldestTier)),
-                                     in: .rect(cornerRadius: Tokens.Radius.panel, style: .continuous))
-                        .glassEffectID("pill", in: glass)
-                } else {
-                    collapsed
-                        .glassEffect(.regular.tint(Tokens.Tier.tint(oldestTier)).interactive(), in: .capsule)
-                        .glassEffectID("pill", in: glass)
-                }
-                if state.pillEdge != .bottom { staleChip }
-            }
+        // The outer frame never animates: it is always the larger (card) size, with the morphing shape pinned to
+        // the anchor corner inside it. If the parent laid out the animating frame, it would place it at its final
+        // size and the shape would grow away from the wrong edge.
+        ZStack(alignment: anchor) {
+            morph
+            staleChip.offset(y: (collapsedSize.height + 8) * (anchoredAtBottom ? -1 : 1))
         }
+        .frame(width: outerSize.width, height: outerSize.height, alignment: anchor)
+        .preference(key: PillSizesKey.self, value: sizes)
         .modifier(BounceOnce(trigger: reduceMotion ? 0 : state.newRequestPulse))
-        .scaleEffect(zero == .settled && state.settings.displayMode != .widgetAlways ? 0.2 : 1)
-        .opacity(state.pillDimmed ? 0.6 : (zero == .settled && state.settings.displayMode != .widgetAlways ? 0 : 1))
+        .scaleEffect(hiddenAtZero ? 0.2 : 1, anchor: anchor.unitPoint)
+        .opacity(hiddenAtZero ? 0 : state.pillDimmed ? 0.75 : 1)
         .motion(Motion.dim, value: state.pillDimmed)
         .motion(Motion.shrink, value: zero)
-        .animation(Motion.pick(Motion.morph, reduced: reduceMotion), value: expanded)
-        .motion(Motion.tint, value: oldestTier)
         .onChange(of: hasRows, initial: true) { _, has in has ? reset() : celebrate() }
         .environment(\.hoverCards, cards)
-        .padding(16)
+    }
+
+    private var outerSize: CGSize {
+        let s = sizes
+        return CGSize(width: max(s.collapsed.width, s.expanded.width), height: max(s.collapsed.height, s.expanded.height))
+    }
+
+    private var sizes: PillSizes {
+        var s = PillSizes()
+        s.collapsed = collapsedSize
+        if chipHeight > 0 { s.collapsed.height += chipHeight + 8 }
+        s.expanded = hasRows ? expandedSize : collapsedSize
+        return s
+    }
+
+    // MARK: Morph
+
+    private var timing: MorphTiming { MorphTiming(reduced: reduceMotion, scale: motionScale) }
+
+    private var morph: some View {
+        let size = expanded ? expandedSize : collapsedSize
+        let radius = expanded ? Tokens.Radius.panel : collapsedSize.height / 2
+        let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
+        return ZStack(alignment: anchor) {
+            // The glass is a leaf whose size and radius animate; the ZStack's alignment keeps its anchor corner
+            // put. Nothing inside it moves, so the content can't drift against it.
+            Color.clear
+                .frame(width: size.width, height: size.height)
+                .background {
+                    // Tint we control, so it reads the same whether the panel is key or not. Capsule only
+                    // (concept B): it fades out as the shape opens into the neutral card.
+                    shape.fill(Tokens.Palette.glassScrim)
+                    if let tint = Tokens.Tier.tint(oldestTier) {
+                        shape.fill(tint).opacity(expanded ? 0 : 1)
+                    }
+                }
+                .glassEffect(.regular, in: shape)
+                .animation(timing.shape(expanded), value: expanded)
+                .motion(Motion.tint, value: oldestTier)
+
+            // Both contents, laid out at their final size at the anchor corner, revealed through the same shape.
+            ZStack(alignment: anchor) {
+                if hasRows {
+                    expandedList
+                        .opacity(expanded ? 1 : 0)
+                        .animation(timing.card(expanded), value: expanded)
+                        .allowsHitTesting(expanded)
+                        .accessibilityHidden(!expanded)
+                        .onGeometryChange(for: CGSize.self) { $0.size } action: { expandedSize = $0 }
+                }
+                collapsed
+                    .opacity(expanded ? 0 : 1)
+                    .scaleEffect(expanded && !reduceMotion ? 0.96 : 1, anchor: anchor.unitPoint)
+                    .animation(timing.capsuleContent(expanded), value: expanded)
+                    .allowsHitTesting(!expanded)
+                    .accessibilityHidden(expanded)
+                    .onGeometryChange(for: CGSize.self) { $0.size } action: { collapsedSize = $0 }
+            }
+            .mask(alignment: anchor) {
+                shape.frame(width: size.width, height: size.height)
+                    .animation(timing.shape(expanded), value: expanded)
+            }
+        }
     }
 
     // MARK: Collapsed
@@ -71,15 +154,17 @@ public struct PillView: View {
     }
 
     private func countCapsule(_ oldest: PRRow) -> some View {
-        capsule {
-            TierDot(tier: oldest.tier, isTeam: oldest.pr.via.isTeam, dimmed: state.isOffHours)
+        let stale = state.status.problem != nil
+        return capsule {
+            TierDot(tier: oldest.tier, isTeam: oldest.pr.via.isTeam, dimmed: state.isOffHours || stale)
             Text(verbatim: "\(state.rows.count)")
                 .font(Tokens.Typo.pillCount).monospacedDigit()
+                .shadow(color: Tokens.Palette.textShadow, radius: 1.5, y: 0.5)
                 .contentTransition(.numericText())
                 .motion(Motion.roll, value: state.rows.count)
             Text("·").font(Tokens.Typo.pillLabel).foregroundStyle(Tokens.Palette.secondary)
-            TimerText(since: oldest.pr.waitingSince, tier: oldest.tier, font: Tokens.Typo.pillTimer, tracking: -0.42)
-                .opacity(state.status.problem == nil ? 1 : 0.7)
+            TimerText(since: oldest.pr.waitingSince, tier: oldest.tier, font: Tokens.Typo.pillTimer, tracking: -0.42,
+                      greyed: stale)
             if state.isOffHours {
                 MoonChip().transition(.move(edge: .leading).combined(with: .opacity))
             }
@@ -126,13 +211,16 @@ public struct PillView: View {
             .fixedSize()
     }
 
+    /// Offline note under (or over) the capsule; the open card shows the same status in its footer.
     @ViewBuilder private var staleChip: some View {
-        if case let .stale(lastSync?, problem) = state.status, problem.fix == nil, hasRows {
+        if case let .stale(lastSync?, problem) = state.status, problem.fix == nil, hasRows, !expanded {
             Text("stale · synced \(Format.ago(lastSync))")
                 .font(Tokens.Typo.caption)
                 .foregroundStyle(Tokens.Palette.secondary)
                 .padding(.horizontal, 9).padding(.vertical, 4)
                 .glassEffect(.regular, in: .capsule)
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { chipHeight = $0 }
+                .onDisappear { chipHeight = 0 }
                 .transition(.opacity)
         }
     }
@@ -159,7 +247,8 @@ public struct PillView: View {
             .contentShape(Rectangle())
             .contextMenu { PillContextMenu(state: state, intents: intents) }
 
-            RowList(state: state, intents: intents, live: true, cardEdge: state.pillEdge.cardArrowEdge)
+            RowList(state: state, intents: intents, live: expanded, cardEdge: state.pillEdge.cardArrowEdge,
+                    reveal: RowList.Reveal(shown: expanded, fromBottom: anchoredAtBottom, animation: timing.row))
 
             if !state.snoozedRows.isEmpty { snoozedLine }
             NoticeLine(notice: state.notice)
@@ -209,10 +298,6 @@ public struct PillView: View {
 
     // MARK: Helpers
 
-    private var horizontalAlignment: HorizontalAlignment {
-        state.pillEdge == .left ? .leading : .trailing
-    }
-
     private func collapsedLabel(_ oldest: PRRow) -> String {
         var label = "\(state.rows.count) waiting on you"
         if let since = oldest.pr.waitingSince {
@@ -234,21 +319,86 @@ public struct PillView: View {
     }
 }
 
+/// Choreography of one morph, from the Motion board (`morph`, `pillout`, `listin` keyframes on a 5s cycle):
+/// expand runs ~0.75s with a slight overshoot; the capsule content fades out over the first 0.3s and the list
+/// fades in from 0.35s. Collapse: the list fades out first, the shape springs back 0.15s later, and the capsule
+/// content returns for the last 0.4s. Reduce Motion: plain 0.2s crossfades, no spring.
+struct MorphTiming {
+    let reduced: Bool
+    let scale: Double
+
+    static let spring = Animation.spring(response: 0.42, dampingFraction: 0.78)
+    static let collapseLead = 0.15
+
+    /// How long the shell should wait after a collapse before shrinking the window.
+    static func collapseDuration(reduced: Bool) -> Double { reduced ? 0.25 : collapseLead + 0.9 }
+
+    func shape(_ expanding: Bool) -> Animation {
+        if reduced { return crossfade }
+        return scaled(expanding ? Self.spring : Self.spring.delay(Self.collapseLead))
+    }
+
+    func capsuleContent(_ expanding: Bool) -> Animation {
+        if reduced { return crossfade }
+        return scaled(expanding ? .easeOut(duration: 0.3).delay(0.05)
+                                : .easeOut(duration: 0.4).delay(Self.collapseLead + 0.45))
+    }
+
+    func card(_ expanding: Bool) -> Animation {
+        if reduced { return crossfade }
+        return scaled(expanding ? .easeInOut(duration: 0.45).delay(0.35) : .easeOut(duration: 0.4))
+    }
+
+    func row(_ index: Int, _ expanding: Bool) -> Animation {
+        if reduced { return crossfade }
+        return scaled(expanding ? .easeOut(duration: 0.4).delay(0.35 + 0.025 * Double(index))
+                                : .easeOut(duration: 0.4))
+    }
+
+    private var crossfade: Animation { scaled(.easeInOut(duration: 0.2)) }
+
+    /// Slowed by `scale` (the gallery's frame inspection).
+    private func scaled(_ animation: Animation) -> Animation { scale == 1 ? animation : animation.speed(1 / scale) }
+}
+
+extension Alignment {
+    var unitPoint: UnitPoint {
+        switch (vertical, horizontal) {
+        case (.top, .leading): .topLeading
+        case (.top, _): .topTrailing
+        case (_, .leading): .bottomLeading
+        default: .bottomTrailing
+        }
+    }
+}
+
 /// The scrolling list of rows with slide-in/out transitions, shared by the pill and the dropdown.
 struct RowList: View {
+    /// Pill-only: rows fade and slide 6pt from the anchor side, staggered, as the card opens.
+    struct Reveal {
+        var shown: Bool
+        var fromBottom: Bool
+        var animation: (Int, Bool) -> Animation
+    }
+
     let state: NudgeState
     let intents: NudgeIntents
     var live: Bool
     var cardEdge: Edge = .bottom
     var activeID: String? = nil
+    var reveal: Reveal? = nil
     @Environment(\.hoverCards) private var cards
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         ScrollView {
             VStack(spacing: 2) {
-                ForEach(state.rows) { row in
+                ForEach(Array(state.rows.enumerated()), id: \.element.id) { index, row in
                     PRRowView(row: row, state: state, intents: intents, live: live, isActive: row.id == activeID, cardEdge: cardEdge)
                         .id(row.id)
+                        .opacity(reveal?.shown == false ? 0 : 1)
+                        .offset(y: rowOffset)
+                        .animation(reveal.map { $0.animation(index, $0.shown) }, value: reveal?.shown)
                         .transition(.asymmetric(
                             insertion: .move(edge: .leading).combined(with: .opacity),
                             removal: .move(edge: .trailing).combined(with: .opacity)))
@@ -260,6 +410,11 @@ struct RowList: View {
         .scrollBounceBehavior(.basedOnSize)
         .onScrollPhaseChange { _, phase in cards.scrolling = phase != .idle }
         .onAppear { cards.activate() }
+    }
+
+    private var rowOffset: CGFloat {
+        guard let reveal, !reveal.shown, !reduceMotion else { return 0 }
+        return reveal.fromBottom ? 6 : -6
     }
 }
 
