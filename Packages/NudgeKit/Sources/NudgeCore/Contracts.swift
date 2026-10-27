@@ -280,3 +280,45 @@ public enum SnoozeParser {
         _snoozeResolve(option, now, config, calendar)
     }
 }
+
+public enum ActionRendering {
+    /// Renders an action for one PR. Throws `ActionTemplateError` for invalid templates (token in single quotes,
+    /// token in URL scheme/host, disallowed scheme, unparseable URL).
+    public static func render(_ action: ReviewAction, pr: WaitingPR, allowedSchemes: [String]) throws -> RenderedAction {
+        try _renderAction(action, pr, allowedSchemes)
+    }
+    /// Human-readable problems for the Settings editor; empty when valid.
+    public static func problems(template: String, kind: ReviewAction.Kind, allowedSchemes: [String]) -> [String] {
+        _actionProblems(template, kind, allowedSchemes)
+    }
+}
+
+public struct ActionTemplateError: Error, Hashable, Sendable {
+    public let message: String
+    public init(_ message: String) { self.message = message }
+}
+
+// MARK: - Engine (NudgeCore implements; the shell drives it)
+
+@MainActor
+public protocol NudgeEngine: AnyObject {
+    /// Called for every banner the planner decides to post.
+    var onNotify: ((PlannedNotification) -> Void)? { get set }
+    func start()
+    func stop()
+    func syncNow()
+    func handleWake()
+    func snooze(_ row: PRRow, _ option: SnoozeOption)
+    func unsnooze(_ row: PRRow)
+    func hide(_ row: PRRow)
+    func updateSettings(_ change: (inout NudgeSettings) -> Void)
+    /// Records that the notification for `rowID` was acted on (e.g. snoozed from the banner).
+    func row(withID rowID: String) -> PRRow?
+}
+
+public enum NudgeEngineFactory {
+    /// `fixtureURL` (DEBUG `-NudgeFixture`) replaces GitHub with a JSON fixture of WaitingPRs.
+    @MainActor public static func make(state: NudgeState, fixtureURL: URL? = nil) -> NudgeEngine {
+        _makeEngine(state, fixtureURL)
+    }
+}

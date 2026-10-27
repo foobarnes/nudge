@@ -26,3 +26,28 @@ func _snoozeResolve(_ option: SnoozeOption, _ now: Date, _ config: WorkHoursConf
     case .untilTomorrow, .untilNextWorkDay: now.addingTimeInterval(16 * 3600)
     }
 }
+
+func _renderAction(_ action: ReviewAction, _ pr: WaitingPR, _ allowedSchemes: [String]) throws -> RenderedAction {
+    .shell(script: "emulate -R zsh\n" + action.template)
+}
+
+func _actionProblems(_ template: String, _ kind: ReviewAction.Kind, _ allowedSchemes: [String]) -> [String] { [] }
+
+@MainActor
+private final class StubEngine: NudgeEngine {
+    let state: NudgeState
+    var onNotify: ((PlannedNotification) -> Void)?
+    init(state: NudgeState) { self.state = state }
+    func start() { state.status = .ok(lastSync: .now) }
+    func stop() {}
+    func syncNow() {}
+    func handleWake() {}
+    func snooze(_ row: PRRow, _ option: SnoozeOption) {}
+    func unsnooze(_ row: PRRow) {}
+    func hide(_ row: PRRow) {}
+    func updateSettings(_ change: (inout NudgeSettings) -> Void) { change(&state.settings) }
+    func row(withID rowID: String) -> PRRow? { state.rows.first { $0.id == rowID } }
+}
+
+@MainActor
+func _makeEngine(_ state: NudgeState, _ fixtureURL: URL?) -> NudgeEngine { StubEngine(state: state) }
