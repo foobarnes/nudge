@@ -214,6 +214,10 @@ public struct NudgeIntents {
     public var updateSettings: @MainActor (_ change: (inout NudgeSettings) -> Void) -> Void
     public var openSettings: @MainActor () -> Void
     public var quit: @MainActor () -> Void
+    /// Opens the menu bar dropdown (from the pill's context menu).
+    public var openDropdown: @MainActor () -> Void = {}
+    /// Hides the floating pill until the next new request (display mode is unchanged).
+    public var dismissPill: @MainActor () -> Void = {}
 
     public init(open: @escaping @MainActor (PRRow) -> Void = { _ in },
                 startReview: @escaping @MainActor (PRRow, ReviewAction.ID?) -> Void = { _, _ in },
