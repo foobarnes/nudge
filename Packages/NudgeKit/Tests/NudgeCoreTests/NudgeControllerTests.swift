@@ -94,6 +94,21 @@ import Testing
         #expect(next.settings.orgRules == ["acme": .silent])
     }
 
+    @Test func noticeFollowsEachSync() {
+        let c = controller("zero-prs.json")
+        c.start()
+        c.stop()
+        let sso = SyncError.ssoProblem(org: "acme")
+        func sync(_ notice: SyncProblem?) {
+            c.apply(.synced(SyncResult(snapshot: SyncSnapshot(prs: [], isComplete: notice == nil, fetchedAt: now),
+                                       viewer: "octocat", orgs: [], capped: false, notice: notice)))
+        }
+        sync(sso)
+        #expect(c.state.notice?.fix == "Authorize SSO for acme: gh auth refresh")
+        sync(nil)
+        #expect(c.state.notice == nil)
+    }
+
     @Test func authFailureNotifiesOncePerEpisode() {
         let c = controller()
         var posted: [PlannedNotification] = []

@@ -30,6 +30,8 @@ struct GitHubClient: Sendable {
         let isComplete: Bool
         let capped: Bool
         let sso: SyncProblem?
+        /// `rateLimit.cost` of each search page.
+        let pageCosts: [Int]
     }
 
     struct Teams: Sendable {
@@ -45,13 +47,16 @@ struct GitHubClient: Sendable {
 
     func fetchWaiting(token: String) async throws -> Waiting {
         var nodes: [PRNode] = [], viewer = "", cursor: String?
-        var complete = true, capped = false, errors: [GraphQLError] = []
+        var complete = true, capped = false, errors: [GraphQLError] = [], costs: [Int] = []
         for page in 1...Self.maxSearchPages {
             let (data, pageErrors) = try await query(Self.waitingQuery, ["cursor": cursor], token: token,
                                                      as: WaitingData.self)
             viewer = data.viewer.login
             errors += pageErrors
-            if let cost = data.rateLimit { Self.log.debug("search page cost \(cost.cost), remaining \(cost.remaining)") }
+            if let cost = data.rateLimit {
+                costs.append(cost.cost)
+                Self.log.debug("search page cost \(cost.cost), remaining \(cost.remaining)")
+            }
             for node in data.search.nodes {
                 switch node {
                 case let .pr(pr): nodes.append(pr)
@@ -71,7 +76,7 @@ struct GitHubClient: Sendable {
             }
         }
         return Waiting(viewer: viewer, nodes: nodes, isComplete: complete && errors.isEmpty && !capped, capped: capped,
-                       sso: Self.ssoProblem(errors))
+                       sso: Self.ssoProblem(errors), pageCosts: costs)
     }
 
     private func allReviewers(_ pr: PRNode, token: String) async throws -> ReviewRequests {

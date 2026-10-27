@@ -112,6 +112,7 @@ final class NudgeController: NudgeEngine {
             problemNotified = false
             state.status = .ok(lastSync: result.snapshot.fetchedAt)
             state.resultsCapped = result.capped
+            state.notice = result.notice
             let banners = NotificationPlanner.ingest(result.snapshot, &requests, settings: state.settings,
                                                      calendar: calendar)
             saveRequests()
