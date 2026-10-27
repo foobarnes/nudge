@@ -191,6 +191,8 @@ public final class NudgeState {
     /// Incremented once per new-request banner; views bounce on change.
     public var newRequestPulse = 0
     public var resultsCapped = false           // "200+ results — some may be missing"
+    /// Non-fatal sync notice shown in the footer while rows still display, e.g. SAML SSO gaps.
+    public var notice: SyncProblem?
 
     // Pill chrome (written by the shell).
     public var pillExpanded = false
