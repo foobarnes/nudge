@@ -7,10 +7,11 @@ let newYork: Calendar = {
     return calendar
 }()
 
-/// "2026-01-09 17:00" in `calendar`'s time zone.
+/// "2026-01-09 17:00" or "2026-01-09 17:00:30" in `calendar`'s time zone.
 func at(_ text: String, _ calendar: Calendar = newYork) -> Date {
     let parts = text.split(whereSeparator: { "- :".contains($0) }).map { Int($0)! }
-    let components = DateComponents(year: parts[0], month: parts[1], day: parts[2], hour: parts[3], minute: parts[4])
+    let components = DateComponents(year: parts[0], month: parts[1], day: parts[2], hour: parts[3], minute: parts[4],
+                                    second: parts.count > 5 ? parts[5] : 0)
     return calendar.date(from: components)!
 }
 

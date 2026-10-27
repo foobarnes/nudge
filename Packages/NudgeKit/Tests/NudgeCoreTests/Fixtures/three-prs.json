@@ -1,0 +1,8 @@
+[
+  { "repo": "acme/api", "number": 4211, "title": "Fix token refresh race", "author": "bo",
+    "headRef": "fix-refresh", "via": "direct", "requestedBy": "bo", "secondsAgo": 18000 },
+  { "repo": "acme/web", "number": 930, "title": "Export reports to CSV", "author": "carmen",
+    "headRef": "csv-export", "via": "direct", "requestedBy": "carmen", "secondsAgo": 3600 },
+  { "repo": "acme/infra", "number": 88, "title": "Bump build dependencies", "author": "bo",
+    "headRef": "bump-deps", "via": "acme/backend", "requestedBy": "bo", "secondsAgo": 1260 }
+]
