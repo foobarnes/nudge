@@ -51,7 +51,9 @@ final class PillController: NSObject, NSWindowDelegate {
         var moving = false
     }
     private var drag: Drag?
+    private var testingHold = false
     private var exitTask: Task<Void, Never>?
+    private var resizeTask: Task<Void, Never>?
     private var settleTask: Task<Void, Never>?
     private var dimTask: Task<Void, Never>?
     private var hideTask: Task<Void, Never>?
@@ -258,8 +260,16 @@ final class PillController: NSObject, NSWindowDelegate {
         setExpanded(false)
     }
 
+    /// DEBUG launch args drive the morph without a pointer (hang and CPU checks).
+    func setExpandedForTesting(_ expanded: Bool) {
+        guard panel.isVisible else { return }
+        testingHold = expanded          // the pointer isn't over the pill, so don't auto-collapse
+        hoverSuppressed = !expanded
+        setExpanded(expanded)
+    }
+
     private func collapseIfOutside() {
-        if state.pillExpanded, !holdOpen, !mouseInside { setExpanded(false) }
+        if state.pillExpanded, !holdOpen, !mouseInside, !testingHold { setExpanded(false) }
     }
 
     private func setExpanded(_ expanded: Bool) {
@@ -271,6 +281,13 @@ final class PillController: NSObject, NSWindowDelegate {
             scheduleDim()
         }
         guard state.pillExpanded != expanded else { return }
+        if expanded {
+            // Make room before the card lays out, so its first frames aren't clipped by the collapsed window.
+            settleTask?.cancel()
+            resizeTask?.cancel()
+            let room = CGSize(width: 380 + 2 * 16, height: 440 + 2 * 16 + 40)   // PillView panel size + its padding + chip
+            panel.setFrame(panel.frame.union(windowFrame(for: room)), display: true)
+        }
         withAnimation(reduceMotion ? nil : .spring(duration: 0.35)) { state.pillExpanded = expanded }
     }
 
@@ -304,10 +321,18 @@ final class PillController: NSObject, NSWindowDelegate {
 
     /// Grow at once so a morph never clips; shrink only after the animation settles, so the frame never changes
     /// under the cursor mid-morph. The content stays pinned to `corner` throughout.
+    ///
+    /// Called from inside SwiftUI's layout pass: resizing the window synchronously here re-enters
+    /// `NSHostingView.layout()`, so the resize is deferred to the next run-loop turn.
     private func contentSizeChanged(_ size: CGSize) {
-        guard size.width > 0, size.height > 0 else { return }
+        guard size.width > 0, size.height > 0, size != contentSize else { return }
         contentSize = size
-        let target = windowFrame(for: size)
+        resizeTask?.cancel()
+        resizeTask = after(0) { [weak self] in self?.grow() }
+    }
+
+    private func grow() {
+        let target = windowFrame(for: contentSize)
         let current = panel.frame
         if target.width > current.width || target.height > current.height {
             panel.setFrame(current.union(target), display: true)

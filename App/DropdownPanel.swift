@@ -15,6 +15,7 @@ final class DropdownPanel: NSObject, NSWindowDelegate {
     private var screen: NSScreen?
     private var contentSize: CGSize = .zero
     private var monitors: [Any] = []
+    private var resizeTask: Task<Void, Never>?
     private var closedAt = Date.distantPast
 
     init(state: NudgeState, intents: NudgeIntents) {
@@ -72,9 +73,16 @@ final class DropdownPanel: NSObject, NSWindowDelegate {
         return window === panel || window.parent === panel
     }
 
+    /// Reported from inside SwiftUI's layout pass; a synchronous `setFrame` here re-enters the hosting view's
+    /// layout (see `PillController.contentSizeChanged`). Defer it.
     private func resize(to size: CGSize) {
+        guard size != contentSize else { return }
         contentSize = size
-        if panel.isVisible { position() }
+        resizeTask?.cancel()
+        resizeTask = after(0) { [weak self] in
+            guard let self, self.panel.isVisible else { return }
+            self.position()
+        }
     }
 
     private func position() {

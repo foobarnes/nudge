@@ -64,6 +64,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         case "settings": after(1.5) { [weak self] in self?.openSettings() }
         default: break
         }
+        if let seconds = launch.expandAfter {
+            after(seconds) { [weak self] in self?.pill.setExpandedForTesting(true) }
+        }
+        if let interval = launch.toggleEvery {
+            Task { @MainActor [weak self] in
+                for i in 0..<20 {
+                    try? await Task.sleep(for: .seconds(interval))
+                    self?.pill.setExpandedForTesting(i.isMultiple(of: 2))
+                }
+            }
+        }
     }
 
     func applicationWillTerminate(_ notification: Notification) {
@@ -91,12 +102,18 @@ struct LaunchOptions {
     var displayMode: DisplayMode?
     /// `-NudgeOpen dropdown|settings`: open that surface shortly after launch, for checks without a pointer.
     var open: String?
+    /// `-NudgeExpandAfter <seconds>`: expand the pill without hovering. `-NudgeToggleEvery <seconds>`: then
+    /// toggle it 20 times, for hang and CPU checks.
+    var expandAfter: Double?
+    var toggleEvery: Double?
 
     init(defaults: UserDefaults = .standard) {
         #if DEBUG
         if let path = defaults.string(forKey: "NudgeFixture") { fixtureURL = URL(fileURLWithPath: path) }
         displayMode = defaults.string(forKey: "NudgeDisplayMode").flatMap(DisplayMode.init(rawValue:))
         open = defaults.string(forKey: "NudgeOpen")
+        if defaults.object(forKey: "NudgeExpandAfter") != nil { expandAfter = defaults.double(forKey: "NudgeExpandAfter") }
+        if defaults.object(forKey: "NudgeToggleEvery") != nil { toggleEvery = defaults.double(forKey: "NudgeToggleEvery") }
         #endif
     }
 }

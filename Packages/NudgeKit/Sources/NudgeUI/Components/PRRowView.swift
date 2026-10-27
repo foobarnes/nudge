@@ -36,6 +36,7 @@ struct PRRowView: View {
                             .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
+                    .focusable(false)
                     .onHover { titleHovered = $0 }
                     .accessibilityLabel(row.accessibilityLabel)
                     .accessibilityHint("Opens the pull request")
