@@ -1,0 +1,7 @@
+query Refetch($id: ID!, $cursor: String) {
+  node(id: $id) { ... on PullRequest {
+    reviewRequests(first: 100, after: $cursor) {
+      pageInfo { hasNextPage endCursor }
+      nodes { requestedReviewer { __typename ... on User { login } ... on Team { slug organization { login } } } } } } }
+  rateLimit { cost remaining }
+}

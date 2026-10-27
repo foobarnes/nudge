@@ -1,0 +1,24 @@
+name: SpikeNotify
+options:
+  deploymentTarget: { macOS: "26.0" }
+targets:
+  SpikeNotify:
+    type: application
+    platform: macOS
+    sources: [Sources]
+    info:
+      path: Sources/Info.plist
+      properties:
+        LSUIElement: true
+        CFBundleDisplayName: Nudge Spike Notify
+        NSAppleEventsUsageDescription: Nudge opens review actions in Terminal.
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: io.github.foobarnes.nudge.spike-notify
+        PRODUCT_NAME: NudgeSpikeNotify
+        SWIFT_VERSION: "6.0"
+        SWIFT_STRICT_CONCURRENCY: complete
+        CODE_SIGN_IDENTITY: "-"
+        CODE_SIGN_STYLE: Manual
+        ENABLE_HARDENED_RUNTIME: NO
+        GENERATE_INFOPLIST_FILE: NO

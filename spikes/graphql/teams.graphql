@@ -1,0 +1,9 @@
+query Teams($login: String!, $orgCursor: String) {
+  viewer {
+    organizations(first: 100, after: $orgCursor) {
+      nodes { login teams(first: 100, userLogins: [$login]) { nodes { slug } pageInfo { hasNextPage endCursor } } }
+      pageInfo { hasNextPage endCursor }
+    }
+  }
+  rateLimit { cost remaining resetAt }
+}

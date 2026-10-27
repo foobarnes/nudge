@@ -1,0 +1,20 @@
+query Waiting($cursor: String) {
+  viewer { login }
+  search(query: "is:open is:pr archived:false review-requested:@me",
+         type: ISSUE, first: 50, after: $cursor) {
+    issueCount
+    pageInfo { hasNextPage endCursor }
+    nodes { ... on PullRequest {
+      id number title url isDraft headRefName author { login }
+      repository { nameWithOwner }
+      reviewRequests(first: 100) { pageInfo { hasNextPage } nodes { requestedReviewer {
+        __typename ... on User { login } ... on Team { slug organization { login } } } } }
+      timelineItems(last: 50, itemTypes: [REVIEW_REQUESTED_EVENT, READY_FOR_REVIEW_EVENT]) { nodes {
+        __typename
+        ... on ReviewRequestedEvent { id createdAt actor { login } requestedReviewer {
+          __typename ... on User { login } ... on Team { slug organization { login } } } }
+        ... on ReadyForReviewEvent { createdAt } } }
+    } }
+  }
+  rateLimit { cost remaining resetAt }
+}
