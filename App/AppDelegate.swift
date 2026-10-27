@@ -25,7 +25,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         actions = ActionRunner(state: state, alerts: notifications)
 
         let engine = engine!
-        let intents = NudgeIntents(
+        var intents = NudgeIntents(
             open: { NSWorkspace.shared.open($0.pr.url) },
             startReview: { [actions] row, actionID in actions?.startReview(row, actionID: actionID) },
             snooze: { engine.snooze($0, $1) },
@@ -35,13 +35,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             updateSettings: { engine.updateSettings($0) },
             openSettings: { [weak self] in self?.openSettings() },
             quit: { NSApp.terminate(nil) })
+        intents.openDropdown = { [weak self] in self?.showDropdown() }
+        intents.dismissPill = { [weak self] in self?.pill.dismiss() }
 
         notifications.connect(engine: engine, intents: intents)
         engine.onNotify = { [notifications] in notifications?.post($0) }
 
         dropdown = DropdownPanel(state: state, intents: intents)
-        statusItem = StatusItemController(state: state) { [weak self] in self?.toggleDropdown() }
         pill = PillController(state: state, intents: intents) { [weak self] in self?.statusItem.screen }
+        statusItem = StatusItemController(state: state, intents: intents, pill: pill) { [weak self] in
+            self?.toggleDropdown()
+        }
         settingsWindow = SettingsWindowController(state: state, intents: intents)
         launchAtLogin = LaunchAtLogin(state: state, engine: engine, alerts: notifications)
 
@@ -72,9 +76,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func toggleDropdown() {
-        if dropdown.isShown { dropdown.close() } else if let anchor = statusItem.buttonFrame {
-            dropdown.show(below: anchor, on: statusItem.screen)
-        }
+        if dropdown.isShown { dropdown.close() } else { showDropdown() }
+    }
+
+    private func showDropdown() {
+        guard !dropdown.isShown, let anchor = statusItem.buttonFrame else { return }
+        dropdown.show(below: anchor, on: statusItem.screen)
     }
 }
 

@@ -43,6 +43,17 @@ struct PillView: View {
         .padding(.vertical, 10)
         .frame(width: state.pillExpanded && !state.rows.isEmpty ? 360 : nil)
         .glassEffect(.regular, in: .rect(cornerRadius: 20))
+        .contextMenu {
+            Button("Open Menu Bar List") { intents.openDropdown() }
+            Button("Hide Pill Until Next Request") { intents.dismissPill() }
+            Button("Settings…") { intents.openSettings() }
+        }
+        .task {
+            guard ProcessInfo.processInfo.environment["NUDGE_DEMO_ACTION"] != nil, let row = state.rows.first else { return }
+            try? await Task.sleep(for: .seconds(2.5))
+            intents.startReview(row, nil)
+            intents.startReview(row, nil)   // debounced: must not run twice
+        }
         .opacity(state.pillDimmed ? 0.6 : 1)
         .animation(.easeInOut(duration: 0.4), value: state.pillDimmed)
     }
@@ -155,6 +166,23 @@ enum NudgeEngineFactory {
                 try? await Task.sleep(for: .seconds(2))
                 state.pillExpanded = true
             }
+        }
+        // NUDGE_DEMO_NOTIFY=1 posts one synthetic banner through engine.onNotify.
+        if ProcessInfo.processInfo.environment["NUDGE_DEMO_NOTIFY"] == "1", let row = state.rows.first {
+            Task { @MainActor in
+                try? await Task.sleep(for: .seconds(2))
+                engine.onNotify?(PlannedNotification(id: row.id, kind: .newRequest, title: "octocat requested your review",
+                                                     body: "acme/api #4211 · Fix token refresh", rowID: row.id, url: row.pr.url))
+            }
+        }
+        // NUDGE_DEMO_ACTION=<marker path> adds a run-on-Start background action that writes the marker and
+        // one that exits non-zero; DevActionTrigger starts a review on the first row.
+        if let marker = ProcessInfo.processInfo.environment["NUDGE_DEMO_ACTION"] {
+            state.settings.actions = [
+                ReviewAction(name: "Write marker", symbol: "doc", kind: .background,
+                             template: "echo ran-$((1+1)) > '\(marker)'; echo logged", runOnStart: true),
+                ReviewAction(name: "Fail on purpose", symbol: "xmark", kind: .background, template: "exit 3", runOnStart: true),
+            ]
         }
         #endif
         return engine

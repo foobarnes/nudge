@@ -41,10 +41,16 @@ final class PillController: NSObject, NSWindowDelegate {
     private var placed = false
 
     private var menuOpen = false
+    private var hoverSuppressed = false
     private var popoversOpen = 0
     /// A child menu or popover (row hover card) is showing: stay expanded, ignore hover exits.
     private var holdOpen: Bool { menuOpen || popoversOpen > 0 }
-    private var dragStartOrigin: NSPoint?
+    private struct Drag {
+        var start: NSPoint
+        var origin: NSPoint
+        var moving = false
+    }
+    private var drag: Drag?
     private var exitTask: Task<Void, Never>?
     private var settleTask: Task<Void, Never>?
     private var dimTask: Task<Void, Never>?
@@ -59,13 +65,13 @@ final class PillController: NSObject, NSWindowDelegate {
         panel.level = .floating
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary, .ignoresCycle]
         panel.hidesOnDeactivate = false
-        panel.isMovableByWindowBackground = true
+        panel.isMovableByWindowBackground = false   // dragging is handled by the event monitor in start()
         panel.isOpaque = false
         panel.backgroundColor = .clear
         panel.hasShadow = false
         panel.isReleasedWhenClosed = false
         panel.delegate = self
-        panel.onEscape = { [weak self] in self?.setExpanded(false) }
+        panel.onEscape = { [weak self] in self?.escape() }
         panel.setAccessibilityLabel("Nudge pill")
 
         let host = TrackingView()
@@ -105,24 +111,52 @@ final class PillController: NSObject, NSWindowDelegate {
         nc.addObserver(forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main) {
             [weak self] _ in MainActor.assumeIsolated { self?.place() }
         }
-        // Click → key (so Esc works); mouse-up after a drag → snap. Local monitors only see Nudge's own events.
-        NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .leftMouseUp]) { [weak self] event in
-            MainActor.assumeIsolated {
-                guard let self, event.window === self.panel else { return }
-                if event.type == .leftMouseDown {
-                    self.dragStartOrigin = self.panel.frame.origin
+        // Click → key (so Esc works). A left drag past a few points moves the window by hand (SwiftUI content
+        // defeats `isMovableByWindowBackground`, and `performDrag` doesn't track here), then snaps on mouse-up.
+        // Right-clicks and control-clicks pass straight to SwiftUI's context menu: no key, no drag, no snap.
+        // Local monitors only see Nudge's own events.
+        NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .leftMouseDragged, .leftMouseUp]) {
+            [weak self] event in
+            let consumed = MainActor.assumeIsolated { () -> Bool in
+                guard let self else { return false }
+                let mouse = NSEvent.mouseLocation
+                switch event.type {
+                case .leftMouseDown:
+                    guard event.window === self.panel, !event.modifierFlags.contains(.control) else { return false }
+                    self.drag = Drag(start: mouse, origin: self.panel.frame.origin)
                     self.panel.allowKey = true
                     self.panel.makeKey()
-                } else if let start = self.dragStartOrigin {
-                    self.dragStartOrigin = nil
-                    if start != self.panel.frame.origin { self.snap() }
+                    return false
+                case .leftMouseDragged:
+                    guard var drag = self.drag else { return false }
+                    if !drag.moving, hypot(mouse.x - drag.start.x, mouse.y - drag.start.y) <= 4 { return false }
+                    drag.moving = true
+                    self.drag = drag
+                    self.settleTask?.cancel()
+                    self.panel.setFrameOrigin(NSPoint(x: drag.origin.x + mouse.x - drag.start.x,
+                                                      y: drag.origin.y + mouse.y - drag.start.y))
+                    return true
+                default:
+                    let moved = self.drag?.moving == true
+                    self.drag = nil
+                    if moved { self.snap() }
+                    return moved
                 }
             }
-            return event
+            return consumed ? nil : event
         }
 
         observeChanges({ [state] in Visibility(mode: state.settings.displayMode, hasRows: !state.rows.isEmpty) }) {
-            [weak self] in self?.updateVisibility($0)
+            [weak self] v in
+            guard let self else { return }
+            if v.mode != self.visibility?.mode { self.dismissed = false }   // a mode change ends a dismissal
+            self.visibility = v
+            self.updateVisibility()
+        }
+        observeChanges({ [state] in state.newRequestPulse }) { [weak self] _ in
+            guard let self, self.dismissed else { return }
+            self.dismissed = false                                         // so does a new request
+            self.updateVisibility()
         }
         observeChanges({ [state] in Attention(tiers: state.rows.map(\.tier), pulse: state.newRequestPulse) }) {
             [weak self] _ in self?.wake()
@@ -141,8 +175,35 @@ final class PillController: NSObject, NSWindowDelegate {
         var pulse: Int
     }
 
-    private func updateVisibility(_ v: Visibility) {
+    /// Hides the pill until the next new request or display-mode change. Not persisted across launches.
+    func dismiss() {
+        dismissed = true
+        updateVisibility()
+    }
+
+    /// Undoes `dismiss()` (status item menu "Show Pill").
+    func undismiss() {
+        dismissed = false
+        updateVisibility()
+    }
+
+    private(set) var dismissed = false
+    private var visibility: Visibility?
+
+    /// Shown now, or would be shown if it weren't dismissed.
+    var isShown: Bool { panel.isVisible }
+    var wouldShow: Bool {
+        switch visibility?.mode {
+        case .widgetAlways: true
+        case .auto: visibility?.hasRows == true
+        case .menuBarOnly, nil: false
+        }
+    }
+
+    private func updateVisibility() {
         hideTask?.cancel()
+        guard let v = visibility else { return }
+        if dismissed { return hide() }
         switch v.mode {
         case .menuBarOnly: hide()
         case .widgetAlways: show()
@@ -177,7 +238,7 @@ final class PillController: NSObject, NSWindowDelegate {
 
     private func mouseEntered() {
         exitTask?.cancel()
-        guard panel.isVisible else { return }
+        guard panel.isVisible, !hoverSuppressed else { return }
         setExpanded(true)
     }
 
@@ -185,8 +246,16 @@ final class PillController: NSObject, NSWindowDelegate {
     private func mouseExited() {
         exitTask?.cancel()
         exitTask = after(0.15) { [weak self] in
-            self?.collapseIfOutside()
+            guard let self, !self.mouseInside else { return }
+            self.hoverSuppressed = false
+            self.collapseIfOutside()
         }
+    }
+
+    /// Esc collapses while the pointer is still over the pill; don't re-expand until it really leaves.
+    private func escape() {
+        hoverSuppressed = true
+        setExpanded(false)
     }
 
     private func collapseIfOutside() {
