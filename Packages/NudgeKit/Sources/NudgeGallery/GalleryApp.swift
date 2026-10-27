@@ -3,9 +3,8 @@ import NudgeCore
 import NudgeUI
 import SwiftUI
 
-// Dev harness: `swift run NudgeGallery [-scene <name>] [-dark] [-shot] [-hover x,y] [-click x,y] [-rightclick x,y]`.
-// Coordinates are window points from the top-left. Prints "WINDOW <number> <x> <y> <w> <h>" once shown,
-// for `screencapture -l <number>` (window only) or `screencapture -R x,y,w,h` (with menus and popovers).
+// Dev harness: `swift run NudgeGallery [-scene <name>] [-dark] [-shot] [-fast]`.
+// Prints "WINDOW <number>" once shown, for `screencapture -l <number>`. Menus and popovers are opened by hand.
 
 @main
 struct GalleryApp: App {
@@ -26,7 +25,7 @@ enum Scene: String, CaseIterable, Identifiable {
     case pillMixed, pillFresh, pillAmber, pillRed, pillTeam, pillOffHours, pillStale, pillAuthError, pillAllClear,
          pillCheck, pillDimmed, pillLoading, pillExpanded, pillExpandedBottom, pillExpandedSnoozed, pillExpandedNotice
     case dropdown, dropdownSnoozed, dropdownEmpty, dropdownAuthError, dropdownNotice
-    case rowRest, rowHovered, hoverCards, workTimePopover, snoozeMenu
+    case rowRest, rowHovered, rowHoveredLabels, hoverCards, workTimePopover, snoozeMenu
     case settingsGeneral, settingsNotifications, settingsActions, settingsAbout
 
     var id: String { rawValue }
@@ -40,7 +39,7 @@ enum Scene: String, CaseIterable, Identifiable {
         switch self {
         case .pillExpanded, .pillExpandedBottom, .pillExpandedSnoozed, .pillExpandedNotice: CGSize(width: 520, height: 540)
         case .dropdown, .dropdownSnoozed, .dropdownEmpty, .dropdownAuthError, .dropdownNotice: CGSize(width: 460, height: 660)
-        case .rowRest, .rowHovered: CGSize(width: 460, height: 200)
+        case .rowRest, .rowHovered, .rowHoveredLabels: CGSize(width: 460, height: 200)
         case .hoverCards: CGSize(width: 460, height: 440)
         case .workTimePopover, .snoozeMenu: CGSize(width: 440, height: 360)
         case .settingsGeneral, .settingsNotifications, .settingsActions, .settingsAbout: CGSize(width: 1000, height: 720)
@@ -86,11 +85,12 @@ struct GalleryView: View {
                 .padding(8)
         case .dropdown, .dropdownSnoozed, .dropdownEmpty, .dropdownAuthError, .dropdownNotice:
             DropdownView(state: state, intents: intents).padding(8)
-        case .rowRest, .rowHovered:
+        case .rowRest, .rowHovered, .rowHoveredLabels:
             glassPanel {
-                GalleryViews.row(state.rows[1], state: state, intents: intents, revealed: scene == .rowHovered)
+                GalleryViews.row(state.rows[1], state: state, intents: intents, revealed: scene != .rowRest)
                 GalleryViews.row(state.rows[3], state: state, intents: intents, revealed: false)
             }
+            .environment(\.miniLabelsVisible, scene == .rowHoveredLabels)
         case .hoverCards:
             VStack(spacing: 16) {
                 glassCard { GalleryViews.hoverCard(SampleRows.longTitle(now: .now), intents: intents) }
@@ -225,45 +225,10 @@ final class GalleryDelegate: NSObject, NSApplicationDelegate {
             try? await Task.sleep(for: .milliseconds(ProcessInfo.processInfo.arguments.contains("-fast") ? 250 : 700))
             guard let window = NSApp.windows.first(where: { $0.isVisible }) else { return }
             window.makeKeyAndOrderFront(nil)
-            let defaults = UserDefaults.standard
-            if let point = screenPoint(defaults.string(forKey: "hover"), in: window) {
-                CGWarpMouseCursorPosition(point)
-                post(.mouseMoved, at: point)
-            }
-            if let point = screenPoint(defaults.string(forKey: "click"), in: window) {
-                CGWarpMouseCursorPosition(point)
-                post(.mouseMoved, at: point)
-                try? await Task.sleep(for: .milliseconds(100))
-                post(.leftMouseDown, at: point)
-                post(.leftMouseUp, at: point)
-            }
-            if let point = screenPoint(defaults.string(forKey: "rightclick"), in: window) {
-                CGWarpMouseCursorPosition(point)
-                post(.mouseMoved, at: point)
-                try? await Task.sleep(for: .milliseconds(100))
-                post(.rightMouseDown, at: point, button: .right)
-                post(.rightMouseUp, at: point, button: .right)
-            }
             let fast = ProcessInfo.processInfo.arguments.contains("-fast")
             try? await Task.sleep(for: .milliseconds(fast ? 150 : 1200))
-            let f = window.frame
-            let top = (NSScreen.screens.first?.frame.height ?? 0) - f.maxY
-            print("WINDOW \(window.windowNumber) \(Int(f.minX)) \(Int(top)) \(Int(f.width)) \(Int(f.height))")
+            print("WINDOW \(window.windowNumber)")
             fflush(stdout)
         }
-    }
-
-    /// Window-relative top-left point → global CG (top-left origin) point.
-    private func screenPoint(_ text: String?, in window: NSWindow) -> CGPoint? {
-        guard let text else { return nil }
-        let parts = text.split(separator: ",").compactMap { Double($0) }
-        guard parts.count == 2, let screen = NSScreen.screens.first else { return nil }
-        let frame = window.frame
-        return CGPoint(x: frame.minX + parts[0], y: screen.frame.height - (frame.maxY - parts[1]))
-    }
-
-    private func post(_ type: CGEventType, at point: CGPoint, button: CGMouseButton = .left) {
-        CGEvent(mouseEventSource: nil, mouseType: type, mouseCursorPosition: point, mouseButton: button)?
-            .post(tap: .cghidEventTap)
     }
 }

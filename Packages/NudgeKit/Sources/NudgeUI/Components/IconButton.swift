@@ -113,10 +113,18 @@ extension View {
     func miniLabel(_ text: String) -> some View { modifier(MiniLabelModifier(text: text)) }
 }
 
+extension EnvironmentValues {
+    /// Forces every mini label visible (previews and the gallery).
+    @Entry public var miniLabelsVisible = false
+}
+
 private struct MiniLabelModifier: ViewModifier {
     let text: String
-    @State private var shown = false
+    @Environment(\.miniLabelsVisible) private var forced
+    @State private var hovered = false
     @State private var task: Task<Void, Never>?
+
+    private var shown: Bool { hovered || forced }
 
     func body(content: Content) -> some View {
         content
@@ -125,10 +133,10 @@ private struct MiniLabelModifier: ViewModifier {
                 if inside {
                     task = Task {
                         try? await Task.sleep(for: .milliseconds(600))
-                        if !Task.isCancelled { shown = true }
+                        if !Task.isCancelled { hovered = true }
                     }
                 } else {
-                    shown = false
+                    hovered = false
                 }
             }
             .overlay(alignment: .bottom) {
