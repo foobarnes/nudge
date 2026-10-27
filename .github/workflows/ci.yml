@@ -1,0 +1,20 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: Package tests
+        run: cd Packages/NudgeKit && swift test
+      - name: Build app
+        run: |
+          xcodegen generate
+          xcodebuild -project Nudge.xcodeproj -scheme Nudge -configuration Debug build CODE_SIGNING_ALLOWED=NO
