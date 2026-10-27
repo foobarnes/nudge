@@ -90,7 +90,7 @@ struct GalleryView: View {
                 GalleryViews.row(state.rows[1], state: state, intents: intents, revealed: scene != .rowRest)
                 GalleryViews.row(state.rows[3], state: state, intents: intents, revealed: false)
             }
-            .environment(\.miniLabelsVisible, scene == .rowHoveredLabels)
+            .environment(\.visibleMiniLabel, scene == .rowHoveredLabels ? "Hide until re-requested" : nil)
         case .hoverCards:
             VStack(spacing: 16) {
                 glassCard { GalleryViews.hoverCard(SampleRows.longTitle(now: .now), intents: intents) }

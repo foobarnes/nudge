@@ -114,17 +114,17 @@ extension View {
 }
 
 extension EnvironmentValues {
-    /// Forces every mini label visible (previews and the gallery).
-    @Entry public var miniLabelsVisible = false
+    /// Forces the mini label with this text visible (previews and the gallery).
+    @Entry public var visibleMiniLabel: String?
 }
 
 private struct MiniLabelModifier: ViewModifier {
     let text: String
-    @Environment(\.miniLabelsVisible) private var forced
+    @Environment(\.visibleMiniLabel) private var forced
     @State private var hovered = false
     @State private var task: Task<Void, Never>?
 
-    private var shown: Bool { hovered || forced }
+    private var shown: Bool { hovered || forced == text }
 
     func body(content: Content) -> some View {
         content
