@@ -502,10 +502,14 @@ private struct PillHost: View {
     let onSize: @MainActor (PillSizes) -> Void
 
     var body: some View {
-        PillView(state: state, intents: intents, anchor: chrome.alignment)
-            .onPreferenceChange(PillSizesKey.self) { sizes in MainActor.assumeIsolated { onSize(sizes) } }
+        // The pill's layout size is always its card size; as an overlay its anchor corner stays at the root's
+        // corner even while the window is only capsule-sized (a frame would centre the overflow instead).
+        Color.clear
+            .overlay(alignment: chrome.alignment) {
+                PillView(state: state, intents: intents, anchor: chrome.alignment)
+                    .onPreferenceChange(PillSizesKey.self) { sizes in MainActor.assumeIsolated { onSize(sizes) } }
+            }
             .padding(PillController.margin)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: chrome.alignment)
     }
 }
 
