@@ -27,7 +27,7 @@ enum Scene: String, CaseIterable, Identifiable {
     case pillMixed, pillFresh, pillAmber, pillRed, pillTeam, pillOffHours, pillStale, pillAuthError, pillAllClear,
          pillCheck, pillDimmed, pillLoading, pillExpanded, pillExpandedBottom, pillExpandedSnoozed, pillExpandedNotice
     case dropdown, dropdownSnoozed, dropdownEmpty, dropdownAuthError, dropdownNotice
-    case rowRest, rowHovered, rowHoveredLabels, hoverCards, workTimePopover, snoozeMenu
+    case rowRest, rowHovered, rowHoveredRed, rowHoveredAmber, rowHoveredTeam, hoverCards, workTimePopover, snoozeMenu
     case settingsGeneral, settingsNotifications, settingsActions, settingsAbout
     case morphTopTrailing, morphTopLeading, morphBottomTrailing, morphBottomLeading
 
@@ -54,7 +54,7 @@ enum Scene: String, CaseIterable, Identifiable {
         case .pillExpanded, .pillExpandedBottom, .pillExpandedSnoozed, .pillExpandedNotice,
              .morphTopTrailing, .morphTopLeading, .morphBottomTrailing, .morphBottomLeading: CGSize(width: 520, height: 540)
         case .dropdown, .dropdownSnoozed, .dropdownEmpty, .dropdownAuthError, .dropdownNotice: CGSize(width: 460, height: 660)
-        case .rowRest, .rowHovered, .rowHoveredLabels: CGSize(width: 460, height: 200)
+        case .rowRest, .rowHovered, .rowHoveredRed, .rowHoveredAmber, .rowHoveredTeam: CGSize(width: 500, height: 200)
         case .hoverCards: CGSize(width: 460, height: 440)
         case .workTimePopover, .snoozeMenu: CGSize(width: 440, height: 360)
         case .settingsGeneral, .settingsNotifications, .settingsActions, .settingsAbout: CGSize(width: 1000, height: 720)
@@ -113,12 +113,13 @@ struct GalleryView: View {
             pill
         case .dropdown, .dropdownSnoozed, .dropdownEmpty, .dropdownAuthError, .dropdownNotice:
             DropdownView(state: state, intents: intents).padding(8)
-        case .rowRest, .rowHovered, .rowHoveredLabels:
+        case .rowRest, .rowHovered, .rowHoveredRed, .rowHoveredAmber, .rowHoveredTeam:
+            // Hovered row: red (0), amber (1) or team (3); another row rests below it.
+            let hovered = scene == .rowHoveredRed ? 0 : scene == .rowHoveredTeam ? 3 : 1
             glassPanel {
-                GalleryViews.row(state.rows[1], state: state, intents: intents, revealed: scene != .rowRest)
-                GalleryViews.row(state.rows[3], state: state, intents: intents, revealed: false)
+                GalleryViews.row(state.rows[hovered], state: state, intents: intents, revealed: scene != .rowRest)
+                GalleryViews.row(state.rows[hovered == 3 ? 2 : 3], state: state, intents: intents, revealed: false)
             }
-            .environment(\.visibleMiniLabel, scene == .rowHoveredLabels ? "Hide until re-requested" : nil)
         case .hoverCards:
             VStack(spacing: 16) {
                 glassCard { GalleryViews.hoverCard(SampleRows.longTitle(now: .now), intents: intents) }
@@ -145,7 +146,7 @@ struct GalleryView: View {
     private func glassPanel<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
         VStack(spacing: 2, content: content)
             .padding(10)
-            .frame(width: 380)
+            .frame(width: 420)
             .glassEffect(.regular, in: .rect(cornerRadius: 26, style: .continuous))
             .padding(24)
     }

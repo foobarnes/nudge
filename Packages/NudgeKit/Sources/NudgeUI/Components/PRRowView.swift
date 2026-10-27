@@ -2,7 +2,8 @@ import NudgeCore
 import SwiftUI
 
 /// One request, shared by the expanded pill and the dropdown. Two lines; hover (or keyboard focus)
-/// cross-fades the work chip into the icon actions. The timer never moves.
+/// cross-fades the work chip into the icon actions, and while the pointer is over one of them the subtitle
+/// becomes that button's name. The timer never moves.
 struct PRRowView: View {
     let row: PRRow
     let state: NudgeState
@@ -16,6 +17,7 @@ struct PRRowView: View {
     @State private var showSnooze = false
     @State private var showBreakdown = false
     @State private var breakdownTask: Task<Void, Never>?
+    @State private var actionLabel = ActionLabel()
 
     private var isTeam: Bool { row.pr.via.isTeam }
     private var revealed: Bool { hovered || isActive || showSnooze }
@@ -25,7 +27,7 @@ struct PRRowView: View {
             TierDot(tier: row.tier, isTeam: isTeam, dimmed: state.isOffHours)
                 .transition(.symbolEffect(.drawOn))
                 .padding(.top, 4)
-            VStack(spacing: 0) {
+            VStack(spacing: Tokens.Space.rowLines) {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
                     Button { intents.open(row) } label: {
                         Text(row.pr.title)
@@ -46,18 +48,13 @@ struct PRRowView: View {
                             WorkTimePopover(row: row, config: state.settings.workHours, thresholds: state.settings.thresholds)
                         }
                 }
-                HStack(alignment: .center, spacing: 8) {
-                    Text(row.subtitle)
-                        .font(Tokens.Typo.rowSubtitle)
-                        .foregroundStyle(Tokens.Palette.secondary)
-                        .lineLimit(1).truncationMode(.tail)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .onHover { titleHovered = $0 }
+                HStack(alignment: .center, spacing: 12) {
+                    subtitle
                     ZStack(alignment: .trailing) {
                         WorkChip(seconds: row.workSeconds, tier: row.tier).opacity(revealed ? 0 : 1)
                         actions.opacity(revealed ? 1 : 0)
                     }
-                    .frame(height: 26)
+                    .frame(height: IconButtonStyle.height)
                     .animation(.easeOut(duration: 0.15), value: revealed)
                 }
             }
@@ -85,8 +82,22 @@ struct PRRowView: View {
         .accessibilityAction(named: "Hide") { intents.hide(row) }
     }
 
+    /// `owner/repo #n · author`, or the hovered action button's name in the same spot (0.12s cross-fade).
+    private var subtitle: some View {
+        let label = actionLabel.text
+        return Text(label ?? row.subtitle)
+            .font(label == nil ? Tokens.Typo.rowSubtitle : Tokens.Typo.rowSubtitle.weight(.semibold))
+            .foregroundStyle(Tokens.Palette.secondary)
+            .lineLimit(1).truncationMode(.tail)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentTransition(.opacity)
+            .animation(.easeInOut(duration: 0.12), value: label)
+            .onHover { titleHovered = $0 }
+            .accessibilityHidden(label != nil)
+    }
+
     private var actions: some View {
-        HStack(spacing: 4) {
+        HStack(spacing: 10) {
             SplitIconMenuButton(symbol: "play.fill", label: "Start review", menuLabel: "Run one action", role: .accent) {
                 intents.startReview(row, nil)
             } menu: {
@@ -105,6 +116,8 @@ struct PRRowView: View {
             IconButton(symbol: "arrow.up.right", label: "Open on GitHub", role: .secondary) { intents.open(row) }
         }
         .fixedSize()
+        .environment(\.actionLabel, actionLabel)
+        .onChange(of: revealed) { _, shown in if !shown { actionLabel.text = nil } }
         .accessibilityHidden(!revealed)
     }
 
@@ -125,6 +138,7 @@ struct PRRowView: View {
     }
 }
 
+/// Icon + title for the 26pt text buttons (hover card, dropdown header).
 struct MiniLabelStyle: LabelStyle {
     func makeBody(configuration: Configuration) -> some View {
         HStack(spacing: 5) {
