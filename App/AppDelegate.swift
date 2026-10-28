@@ -14,13 +14,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var pill: PillController!
     private var settingsWindow: SettingsWindowController!
     private var launchAtLogin: LaunchAtLogin!
-    private let updater = Updater()
+    private var updater: Updater!
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
         NSApp.mainMenu = MainMenu.make()
 
         let launch = LaunchOptions()
+        updater = Updater(state: state)
         engine = NudgeEngineFactory.make(state: state, fixtureURL: launch.fixtureURL)
         notifications = NotificationService(state: state)
         actions = ActionRunner(state: state, alerts: notifications)
@@ -38,6 +39,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             quit: { NSApp.terminate(nil) })
         intents.openDropdown = { [weak self] in self?.showDropdown() }
         intents.dismissPill = { [weak self] in self?.pill.dismiss() }
+        intents.checkForUpdates = { [updater] in updater?.checkForUpdateInformation() }
+        intents.installUpdate = { [updater] in updater?.checkForUpdates() }
+        intents.setChecksForUpdatesAutomatically = { [updater] in updater?.setChecksAutomatically($0) }
 
         notifications.connect(engine: engine, intents: intents)
         engine.onNotify = { [notifications] in notifications?.post($0) }

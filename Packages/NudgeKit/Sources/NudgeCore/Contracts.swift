@@ -175,6 +175,22 @@ public struct OrgSummary: Hashable, Identifiable, Sendable {
     }
 }
 
+/// What the in-app updater last reported, for Settings → About. The shell's Sparkle updater writes it.
+public struct UpdateStatus: Hashable, Sendable {
+    public enum Phase: Hashable, Sendable {
+        case idle, checking, upToDate
+        case available(version: String)
+        case failed(message: String)
+    }
+    public var phase: Phase
+    public var lastChecked: Date?
+    /// Sparkle's own setting: check hourly, then download and install in the background.
+    public var checksAutomatically: Bool
+    public init(phase: Phase = .idle, lastChecked: Date? = nil, checksAutomatically: Bool = true) {
+        self.phase = phase; self.lastChecked = lastChecked; self.checksAutomatically = checksAutomatically
+    }
+}
+
 /// Window chrome the AppKit shell drives and the pill view reads.
 public enum ScreenEdge: String, Codable, Sendable { case top, bottom, left, right }
 
@@ -193,6 +209,8 @@ public final class NudgeState {
     public var resultsCapped = false           // "200+ results — some may be missing"
     /// Non-fatal sync notice shown in the footer while rows still display, e.g. SAML SSO gaps.
     public var notice: SyncProblem?
+    /// nil when the updater is off: local builds have no Sparkle key.
+    public var updates: UpdateStatus?
 
     // Pill chrome (written by the shell).
     public var pillExpanded = false
@@ -220,6 +238,11 @@ public struct NudgeIntents {
     public var openDropdown: @MainActor () -> Void = {}
     /// Hides the floating pill until the next new request (display mode is unchanged).
     public var dismissPill: @MainActor () -> Void = {}
+    /// Checks the appcast quietly; the result lands in `NudgeState.updates`.
+    public var checkForUpdates: @MainActor () -> Void = {}
+    /// Opens the updater's own install prompt for the update `checkForUpdates` found.
+    public var installUpdate: @MainActor () -> Void = {}
+    public var setChecksForUpdatesAutomatically: @MainActor (Bool) -> Void = { _ in }
 
     public init(open: @escaping @MainActor (PRRow) -> Void = { _ in },
                 startReview: @escaping @MainActor (PRRow, ReviewAction.ID?) -> Void = { _, _ in },
