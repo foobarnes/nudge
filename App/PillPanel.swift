@@ -82,6 +82,7 @@ final class PillController: NSObject, NSWindowDelegate {
         panel.isOpaque = false
         panel.backgroundColor = .clear
         panel.hasShadow = false
+        panel.animationBehavior = .none   // resignKey() reorders the panel; a fade there flashes the pill out
         panel.isReleasedWhenClosed = false
         panel.delegate = self
         panel.onEscape = { [weak self] in self?.escape() }
@@ -155,8 +156,9 @@ final class PillController: NSObject, NSWindowDelegate {
                     self.drag = nil
                     if moved {
                         self.snap()
-                    } else {
-                        // A click, not a drag: key so Esc works. Becoming key mid-drag restyles the glass.
+                    } else if !self.state.rows.isEmpty {
+                        // A click on the card: key so Esc works. Key restyles the glass, so the bare
+                        // capsule (nothing to collapse) never takes it, and neither does a drag.
                         self.panel.allowKey = true
                         self.panel.makeKey()
                     }
