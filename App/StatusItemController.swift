@@ -101,11 +101,7 @@ final class StatusItemController {
 
     private func render(_ a: Appearance) {
         guard let button = item.button else { return }
-        let symbol = a.isStale ? "clock.badge.exclamationmark" : "clock.badge"
-        let image = NSImage(systemSymbolName: symbol, accessibilityDescription: nil)
-            ?? NSImage(systemSymbolName: "clock.badge", accessibilityDescription: nil)
-        image?.isTemplate = true
-        button.image = image
+        button.image = .nudgeGlyph(stale: a.isStale)
         button.title = a.count > 0 ? "\(a.count)" : ""
         let waiting = a.count == 1 ? "1 review waiting" : "\(a.count) reviews waiting"
         button.setAccessibilityLabel("Nudge, \(waiting)\(a.isStale ? ", sync problem" : "")")

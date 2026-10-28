@@ -1,3 +1,4 @@
+import AppKit
 import NudgeCore
 import SwiftUI
 
@@ -16,13 +17,13 @@ struct AboutSettingsView: View {
             SettingsHeader(title: "About", subtitle: "A small nudge for the reviews waiting on you.")
             SettingsCard {
                 HStack(spacing: 14) {
-                    Image(systemName: "clock.badge")
-                        .font(.system(size: 26, weight: .semibold))
-                        .foregroundStyle(.white)
-                        .frame(width: 56, height: 56)
-                        .background(Tokens.Palette.accent, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    Image(nsImage: NSApp.applicationIconImage)
+                        .resizable()
+                        .frame(width: 64, height: 64)
+                        .accessibilityHidden(true)
                     VStack(alignment: .leading, spacing: 3) {
-                        Text("Nudge").font(Tokens.Typo.heading)
+                        // The wordmark: lowercase, rounded black.
+                        Text("nudge").font(.system(size: 26, weight: .black, design: .rounded)).accessibilityLabel("Nudge")
                         Text("Version \(version)").font(Tokens.Typo.rowSubtitle).foregroundStyle(Tokens.Palette.settingsSecondary)
                     }
                     Spacer()
