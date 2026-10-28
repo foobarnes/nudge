@@ -46,6 +46,8 @@ targets:
         # Unsandboxed: Nudge spawns `gh`, terminals, and user scripts.
         ENABLE_APP_SANDBOX: NO
         DEAD_CODE_STRIPPING: YES
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
       configs:
         Debug:
           SWIFT_ACTIVE_COMPILATION_CONDITIONS: DEBUG
