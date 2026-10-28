@@ -131,9 +131,11 @@ jobs:
           spctl --assess --type open --context context:primary-signature -v "build/Nudge-$VERSION.dmg"
 
       # Draft first so the "latest" appcast URL never points at a release without its appcast.
+      # Nudge.dmg is the same notarized file under a fixed name, so releases/latest/download/Nudge.dmg always works.
       - name: Draft release
         run: |
-          gh release create "$TAG" "build/Nudge-$VERSION.dmg" --draft --target "$GITHUB_SHA" \
+          cp "build/Nudge-$VERSION.dmg" build/Nudge.dmg
+          gh release create "$TAG" "build/Nudge-$VERSION.dmg" build/Nudge.dmg --draft --target "$GITHUB_SHA" \
             --title "Nudge $VERSION" --generate-notes
 
       - name: Appcast
