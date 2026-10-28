@@ -10,7 +10,7 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
     private static let cornerRadius: CGFloat = 30
     private let window: NSWindow
 
-    init(state: NudgeState, intents: NudgeIntents) {
+    init(state: NudgeState, intents: NudgeIntents, initialTab: SettingsTab = .general) {
         window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 760, height: 520),
                           styleMask: [.titled, .closable, .miniaturizable, .fullSizeContentView],
                           backing: .buffered, defer: true)
@@ -30,7 +30,7 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
         window.delegate = self
 
         // The window takes the SwiftUI view's size (and follows it if the view changes size).
-        let controller = NSHostingController(rootView: SettingsRootView(state: state, intents: intents))
+        let controller = NSHostingController(rootView: SettingsRootView(state: state, intents: intents, initialTab: initialTab))
         controller.sizingOptions = [.preferredContentSize]
         controller.safeAreaRegions = []   // draw under the transparent titlebar; the traffic lights float on the glass
         window.contentViewController = controller

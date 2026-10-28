@@ -47,7 +47,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         statusItem = StatusItemController(state: state, intents: intents, pill: pill, updater: updater) { [weak self] in
             self?.toggleDropdown()
         }
-        settingsWindow = SettingsWindowController(state: state, intents: intents)
+        settingsWindow = SettingsWindowController(state: state, intents: intents, initialTab: launch.settingsTab ?? .general)
         launchAtLogin = LaunchAtLogin(state: state, engine: engine, alerts: notifications)
 
         NSWorkspace.shared.notificationCenter.addObserver(
@@ -114,6 +114,8 @@ struct LaunchOptions {
     var displayMode: DisplayMode?
     /// `-NudgeOpen dropdown|settings`: open that surface shortly after launch, for checks without a pointer.
     var open: String?
+    /// `-NudgeSettingsTab general|notifications|actions|about`: the tab Settings opens on.
+    var settingsTab: SettingsTab?
     /// `-NudgeExpandAfter <seconds>`: expand the pill without hovering. `-NudgeToggleEvery <seconds>`: then
     /// toggle it 20 times, for hang and CPU checks.
     var expandAfter: Double?
@@ -126,6 +128,7 @@ struct LaunchOptions {
         if let path = defaults.string(forKey: "NudgeFixture") { fixtureURL = URL(fileURLWithPath: path) }
         displayMode = defaults.string(forKey: "NudgeDisplayMode").flatMap(DisplayMode.init(rawValue:))
         open = defaults.string(forKey: "NudgeOpen")
+        settingsTab = defaults.string(forKey: "NudgeSettingsTab").flatMap(SettingsTab.init(rawValue:))
         if defaults.object(forKey: "NudgeExpandAfter") != nil { expandAfter = defaults.double(forKey: "NudgeExpandAfter") }
         if defaults.object(forKey: "NudgeToggleEvery") != nil { toggleEvery = defaults.double(forKey: "NudgeToggleEvery") }
         if defaults.object(forKey: "NudgeSnapEvery") != nil { snapEvery = defaults.double(forKey: "NudgeSnapEvery") }
