@@ -19,10 +19,10 @@ func orNull(_ value: String?) -> Any { value.map { $0 as Any } ?? NSNull() }
 
 func ready(_ time: String) -> JSON { ["__typename": "ReadyForReviewEvent", "createdAt": time] }
 
-func prJSON(id: String = "PR_example1", number: Int = 4211, draft: Bool = false, reviewers: [JSON],
-            events: [JSON], moreReviewers: String? = nil) -> JSON {
+func prJSON(id: String = "PR_example1", number: Int = 4211, draft: Bool = false, botAuthor: Bool = false,
+            reviewers: [JSON], events: [JSON], moreReviewers: String? = nil) -> JSON {
     ["id": id, "number": number, "title": "Fix token refresh", "url": "https://github.com/acme/api/pull/\(number)",
-     "isDraft": draft, "headRefName": "fix-refresh", "author": ["login": "alice"],
+     "isDraft": draft, "headRefName": "fix-refresh", "author": ["__typename": botAuthor ? "Bot" : "User", "login": "alice"],
      "repository": ["nameWithOwner": "acme/api"],
      "reviewRequests": ["pageInfo": ["hasNextPage": moreReviewers != nil, "endCursor": orNull(moreReviewers)],
                         "nodes": reviewers.map { ["requestedReviewer": $0] }],

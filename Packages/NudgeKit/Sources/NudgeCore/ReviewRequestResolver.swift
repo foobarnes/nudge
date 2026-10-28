@@ -31,7 +31,8 @@ enum ReviewRequestResolver {
     }
 
     private static func resolve(_ node: PRNode, viewer: String, teams: Set<String>) -> WaitingPR? {
-        guard !node.isDraft else { return nil }
+        // A person's draft isn't ready for review yet; a bot's draft (an automated fix) is waiting as soon as it asks.
+        guard !node.isDraft || node.author?.isBot == true else { return nil }
         var targets: [RequestTarget] = []
         for request in node.reviewRequests.nodes {
             if let t = target(request?.requestedReviewer, viewer: viewer, teams: teams), !targets.contains(t) {
