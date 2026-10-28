@@ -37,7 +37,7 @@ struct SnoozeMenu: View {
                         Spacer(minLength: 0)
                         Text(end.map { Format.weekdayTimeIfNotToday($0) } ?? "No work days")
                             .font(Tokens.Typo.menuHint)
-                            .foregroundStyle(option == state.settings.defaultSnooze ? .white.opacity(0.85) : Tokens.Palette.secondary)
+                            .foregroundStyle(option == state.settings.defaultSnooze ? .white : Tokens.Palette.secondary)
                     }
                 }
                 .buttonStyle(MenuItemStyle(selected: option == state.settings.defaultSnooze))
