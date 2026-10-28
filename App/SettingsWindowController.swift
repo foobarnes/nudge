@@ -4,13 +4,15 @@ import NudgeUI
 import SwiftUI
 
 /// Frameless-looking tinted-glass Settings window. While it is open Nudge takes the `.regular` policy (Dock icon,
-/// menu bar, normal activation); closing it returns to `.accessory`.
+/// menu bar, normal activation) unless `showInDock` is off; closing it returns to `.accessory`.
 @MainActor
 final class SettingsWindowController: NSObject, NSWindowDelegate {
     private static let cornerRadius: CGFloat = 30
     private let window: NSWindow
+    private let state: NudgeState
 
     init(state: NudgeState, intents: NudgeIntents) {
+        self.state = state
         window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 760, height: 520),
                           styleMask: [.titled, .closable, .miniaturizable, .fullSizeContentView],
                           backing: .buffered, defer: true)
@@ -41,10 +43,15 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
             view.layer?.cornerCurve = .continuous
             view.layer?.masksToBounds = true
         }
+        observeChanges({ [state] in state.settings.showInDock }) { [weak self] _ in
+            guard let self, window.isVisible else { return }
+            applyPolicy()
+            NSApp.activate()   // dropping to `.accessory` deactivates the app; keep Settings in front
+        }
     }
 
     func show() {
-        NSApp.setActivationPolicy(.regular)
+        applyPolicy()
         if !window.isVisible { window.center() }
         window.makeKeyAndOrderFront(nil)
         window.makeFirstResponder(nil)   // no focus ring on the first sidebar row until the user presses Tab
@@ -56,6 +63,10 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
     func windowWillClose(_ notification: Notification) {
         // Defer so the window finishes closing before the Dock icon goes away.
         after(0) { NSApp.setActivationPolicy(.accessory) }
+    }
+
+    private func applyPolicy() {
+        NSApp.setActivationPolicy(state.settings.showInDock ? .regular : .accessory)
     }
 
     func windowDidResize(_ notification: Notification) { window.invalidateShadow() }

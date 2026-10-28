@@ -94,6 +94,14 @@ import Testing
         #expect(next.settings.orgRules == ["acme": .silent])
     }
 
+    @Test func settingsSavedBeforeANewFieldStillLoad() {
+        defaults.set(Data(#"{"launchAtLogin":true,"repoRules":{"acme/api":"hidden"}}"#.utf8), forKey: "settings")
+        let loaded = Store(defaults: defaults).loadSettings()
+        #expect(loaded.launchAtLogin)
+        #expect(loaded.repoRules == ["acme/api": .hidden])
+        #expect(loaded.showInDock)
+    }
+
     @Test func noticeFollowsEachSync() {
         let c = controller("zero-prs.json")
         c.start()
