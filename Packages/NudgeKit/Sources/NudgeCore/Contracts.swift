@@ -28,7 +28,35 @@ public enum NotifyLevel: String, Codable, CaseIterable, Sendable { case notify, 
 
 public enum DisplayMode: String, Codable, CaseIterable, Sendable { case menuBarOnly, widgetAlways, auto }
 
-public enum TerminalApp: String, Codable, CaseIterable, Sendable { case ghostty, terminal }
+public enum TerminalApp: String, Codable, CaseIterable, Sendable {
+    case ghostty, cmux, iterm, warp, wezterm, kitty, alacritty, terminal
+
+    public var title: String {
+        switch self {
+        case .ghostty: "Ghostty"
+        case .cmux: "cmux"
+        case .iterm: "iTerm2"
+        case .warp: "Warp"
+        case .wezterm: "WezTerm"
+        case .kitty: "kitty"
+        case .alacritty: "Alacritty"
+        case .terminal: "Terminal"
+        }
+    }
+
+    public var bundleID: String {
+        switch self {
+        case .ghostty: "com.mitchellh.ghostty"
+        case .cmux: "com.cmuxterm.app"
+        case .iterm: "com.googlecode.iterm2"
+        case .warp: "dev.warp.Warp-Stable"
+        case .wezterm: "com.github.wez.wezterm"
+        case .kitty: "net.kovidgoyal.kitty"
+        case .alacritty: "org.alacritty"
+        case .terminal: "com.apple.Terminal"
+        }
+    }
+}
 
 /// A request that is currently waiting on the viewer, as resolved from GitHub.
 public struct WaitingPR: Identifiable, Hashable, Sendable {

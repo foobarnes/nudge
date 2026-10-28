@@ -84,45 +84,136 @@ final class ActionRunner {
     // MARK: Terminal
 
     private func openInTerminal(_ script: URL, actionName: String) {
-        switch state.settings.terminalApp {
-        case .ghostty: openInGhostty(script, actionName: actionName)
-        case .terminal: openInTerminalApp(script, actionName: actionName)
+        let terminal = state.settings.terminalApp
+        guard let app = NSWorkspace.shared.urlForApplication(withBundleIdentifier: terminal.bundleID) else {
+            alerts.alert(title: "“\(actionName)” needs \(terminal.title)",
+                         body: "\(terminal.title) isn't installed. Install it or pick another terminal in Settings › General.")
+            return
+        }
+        let quoted = Self.shellQuoted(script.path)
+        // For terminals that close when their command exits: run the script, then stay in a shell so its output
+        // stays readable.
+        let keepOpen = "/bin/zsh -l \(quoted); exec /bin/zsh -l"
+        switch terminal {
+        case .ghostty:
+            open(app, ["--wait-after-command=true", "-e", "/bin/zsh", "-l", script.path], terminal, actionName)
+        case .wezterm:
+            open(app, ["start", "--", "/bin/zsh", "-l", "-c", keepOpen], terminal, actionName)
+        case .kitty:
+            open(app, ["/bin/zsh", "-l", "-c", keepOpen], terminal, actionName)
+        case .alacritty:
+            open(app, ["-e", "/bin/zsh", "-l", "-c", keepOpen], terminal, actionName)
+        case .cmux:
+            openInCmux(app, command: "/bin/zsh -l \(quoted)", actionName: actionName)
+        case .warp:
+            openInWarp(command: "/bin/zsh -l \(quoted)", actionName: actionName)
+        case .iterm:
+            runAppleScript("""
+            tell application "iTerm"
+                activate
+                tell current session of (create window with default profile) to write text "\(Self.appleScriptLiteral("/bin/zsh -l " + quoted))"
+            end tell
+            """, terminal, actionName)
+        case .terminal:
+            runAppleScript("""
+            tell application "Terminal"
+                activate
+                do script "\(Self.appleScriptLiteral("/bin/zsh -l " + quoted))"
+            end tell
+            """, terminal, actionName)
         }
     }
 
-    private func openInGhostty(_ script: URL, actionName: String) {
-        guard let app = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.mitchellh.ghostty") else {
-            alerts.alert(title: "“\(actionName)” needs Ghostty",
-                         body: "Ghostty isn't installed. Install it or pick Terminal in Settings › General.")
-            return
-        }
-        // --wait-after-command keeps the window open so the command's output stays readable.
+    /// The script paths are Nudge's own temp paths (no PR data); they're still quoted for the shell.
+    private static func shellQuoted(_ path: String) -> String {
+        "'" + path.replacingOccurrences(of: "'", with: "'\\''") + "'"
+    }
+
+    private static func appleScriptLiteral(_ text: String) -> String {
+        text.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"")
+    }
+
+    /// A new instance of `app` with `arguments`, for terminals that take the command on their command line.
+    private func open(_ app: URL, _ arguments: [String], _ terminal: TerminalApp, _ actionName: String) {
         let open = Process()
         open.executableURL = URL(fileURLWithPath: "/usr/bin/open")
-        open.arguments = ["-n", "-a", app.path, "--args", "--wait-after-command=true", "-e", "/bin/zsh", "-l", script.path]
+        open.arguments = ["-n", "-a", app.path, "--args"] + arguments
         open.terminationHandler = { [alerts] process in
             let status = process.terminationStatus
             guard status != 0 else { return }
-            Task { @MainActor in alerts.alert(title: "“\(actionName)” failed", body: "Ghostty didn't start (exit \(status)).") }
+            Task { @MainActor in
+                alerts.alert(title: "“\(actionName)” failed", body: "\(terminal.title) didn't start (exit \(status)).")
+            }
         }
         do { try open.run() } catch {
             alerts.alert(title: "“\(actionName)” failed", body: error.localizedDescription)
         }
     }
 
-    private func openInTerminalApp(_ script: URL, actionName: String) {
-        guard NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.apple.Terminal") != nil else {
-            alerts.alert(title: "“\(actionName)” needs Terminal", body: "Terminal isn't installed.")
+    /// A new cmux workspace named after the action, via cmux's bundled CLI. Launches cmux first if needed and
+    /// retries while its socket comes up.
+    private func openInCmux(_ app: URL, command: String, actionName: String) {
+        let cli = app.appendingPathComponent("Contents/Resources/bin/cmux")
+        let arguments = ["workspace", "create", "--name", actionName, "--command", command, "--focus", "true"]
+        let alerts = self.alerts
+        Task {
+            _ = try? await NSWorkspace.shared.openApplication(at: app, configuration: NSWorkspace.OpenConfiguration())
+            var status: Int32 = -1
+            for _ in 0..<10 {
+                status = await Self.run(cli, arguments)
+                if status == 0 { return }
+                try? await Task.sleep(for: .milliseconds(500))
+            }
+            alerts.alert(title: "“\(actionName)” failed", body: "cmux didn't open a workspace (exit \(status)).")
+        }
+    }
+
+    private nonisolated static func run(_ executable: URL, _ arguments: [String]) async -> Int32 {
+        await withCheckedContinuation { continuation in
+            let process = Process()
+            process.executableURL = executable
+            process.arguments = arguments
+            process.environment = ProcessInfo.processInfo.environment.merging(["CMUX_QUIET": "1"]) { $1 }
+            process.standardOutput = FileHandle.nullDevice
+            process.standardError = FileHandle.nullDevice
+            process.terminationHandler = { continuation.resume(returning: $0.terminationStatus) }
+            do { try process.run() } catch { continuation.resume(returning: -1) }
+        }
+    }
+
+    /// Warp has no command-line way to run a command; it runs one from a launch configuration opened by URL.
+    private func openInWarp(command: String, actionName: String) {
+        let dir = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".warp/launch_configurations")
+        let file = dir.appendingPathComponent("Nudge.yaml")
+        let yaml = """
+        ---
+        name: Nudge
+        windows:
+          - tabs:
+              - title: "\(actionName.replacingOccurrences(of: "\"", with: "'"))"
+                layout:
+                  cwd: "\(NSHomeDirectory())"
+                  commands:
+                    - exec: "\(command.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\""))"
+        """
+        do {
+            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            try yaml.write(to: file, atomically: true, encoding: .utf8)
+        } catch {
+            alerts.alert(title: "“\(actionName)” failed", body: error.localizedDescription)
             return
         }
-        // The path is Nudge's own temp path (no PR data), and it still goes through `quoted form of`.
-        let literal = script.path.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"")
-        let source = """
-        tell application "Terminal"
-            activate
-            do script "/bin/zsh -l " & quoted form of "\(literal)"
-        end tell
-        """
+        var url = URLComponents()
+        url.scheme = "warp"
+        url.host = "launch"
+        url.path = file.path
+        guard let link = url.url, NSWorkspace.shared.open(link) else {
+            alerts.alert(title: "“\(actionName)” failed", body: "Warp didn't open its launch configuration.")
+            return
+        }
+    }
+
+    private func runAppleScript(_ source: String, _ terminal: TerminalApp, _ actionName: String) {
         let alerts = self.alerts
         // Off the main thread: the first run blocks on the Automation prompt.
         Task.detached {
@@ -133,7 +224,7 @@ final class ActionRunner {
             let message = error[NSAppleScript.errorMessage] as? String ?? "AppleScript error \(code)"
             await MainActor.run {
                 if code == -1743 {   // errAEEventNotPermitted: Automation denied
-                    alerts.alert(title: "Nudge can't control Terminal",
+                    alerts.alert(title: "Nudge can't control \(terminal.title)",
                                  body: "Allow it in System Settings › Privacy & Security › Automation.",
                                  url: Self.automationSettings)
                 } else {
