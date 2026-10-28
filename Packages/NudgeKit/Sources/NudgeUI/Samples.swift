@@ -31,6 +31,7 @@ public extension NudgeState {
         state.settings.orgRules = ["acme": .notify, "widgets-inc": .notify, "octocat": .silent]
         state.settings.repoRules = ["acme/infra": .silent, "acme/docs": .hidden]
         state.settings.actions = SampleRows.actions
+        state.updates = UpdateStatus(lastChecked: now.addingTimeInterval(-25 * 60))
 
         switch scenario {
         case .mixed: state.rows = rows

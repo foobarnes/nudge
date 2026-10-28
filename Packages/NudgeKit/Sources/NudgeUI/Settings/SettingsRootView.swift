@@ -109,7 +109,7 @@ public struct SettingsRootView: View {
         case .general: GeneralSettingsView(state: state, intents: intents)
         case .notifications: NotificationSettingsView(state: state, intents: intents)
         case .actions: ActionsSettingsView(state: state, intents: intents)
-        case .about: AboutSettingsView(state: state)
+        case .about: AboutSettingsView(state: state, intents: intents)
         }
     }
 }

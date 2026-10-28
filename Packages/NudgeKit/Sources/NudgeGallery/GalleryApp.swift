@@ -29,11 +29,13 @@ enum Scene: String, CaseIterable, Identifiable {
     case dropdown, dropdownSnoozed, dropdownEmpty, dropdownAuthError, dropdownNotice
     case rowRest, rowHovered, rowHoveredRed, rowHoveredAmber, rowHoveredTeam, hoverCards, workTimePopover, snoozeMenu
     case settingsGeneral, settingsNotifications, settingsActions, settingsAbout
+    case settingsAboutChecking, settingsAboutUpToDate, settingsAboutAvailable, settingsAboutFailed
     case morphTopTrailing, morphTopLeading, morphBottomTrailing, morphBottomLeading
 
     var id: String { rawValue }
 
     var isMorph: Bool { rawValue.hasPrefix("morph") }
+    var isSettings: Bool { rawValue.hasPrefix("settings") }
 
     var anchor: Alignment {
         switch self {
@@ -57,7 +59,7 @@ enum Scene: String, CaseIterable, Identifiable {
         case .rowRest, .rowHovered, .rowHoveredRed, .rowHoveredAmber, .rowHoveredTeam: CGSize(width: 500, height: 200)
         case .hoverCards: CGSize(width: 460, height: 440)
         case .workTimePopover, .snoozeMenu: CGSize(width: 440, height: 360)
-        case .settingsGeneral, .settingsNotifications, .settingsActions, .settingsAbout: CGSize(width: 1000, height: 720)
+        case _ where isSettings: CGSize(width: 1000, height: 720)
         default: CGSize(width: 420, height: 180)
         }
     }
@@ -66,8 +68,8 @@ enum Scene: String, CaseIterable, Identifiable {
     var wallpaperIsDark: Bool {
         if ProcessInfo.processInfo.arguments.contains("-dark") { return true }
         return switch self {
-        case .settingsGeneral, .settingsNotifications, .settingsActions, .settingsAbout, .pillOffHours: true
-        default: false
+        case .pillOffHours: true
+        default: isSettings
         }
     }
 }
@@ -130,7 +132,8 @@ struct GalleryView: View {
             glassCard { GalleryViews.workTimePopover(state: state) }.padding(24)
         case .snoozeMenu:
             glassCard { GalleryViews.snoozeMenu(state: state, intents: intents) }.padding(24)
-        case .settingsGeneral, .settingsNotifications, .settingsActions, .settingsAbout:
+        case .settingsGeneral, .settingsNotifications, .settingsActions, .settingsAbout, .settingsAboutChecking,
+             .settingsAboutUpToDate, .settingsAboutAvailable, .settingsAboutFailed:
             SettingsRootView(state: state, intents: intents, initialTab: tab).padding(24)
         }
     }
@@ -159,13 +162,14 @@ struct GalleryView: View {
         switch scene {
         case .settingsNotifications: .notifications
         case .settingsActions: .actions
-        case .settingsAbout: .about
+        case .settingsAbout, .settingsAboutChecking, .settingsAboutUpToDate, .settingsAboutAvailable,
+             .settingsAboutFailed: .about
         default: .general
         }
     }
 
     private var intents: NudgeIntents {
-        NudgeIntents(
+        var intents = NudgeIntents(
             snooze: { row, option in
                 state.rows.removeAll { $0.id == row.id }
                 let until = SnoozeParser.resolve(option, now: .now, config: state.settings.workHours) ?? .now
@@ -177,6 +181,9 @@ struct GalleryView: View {
             },
             hide: { row in state.rows.removeAll { $0.id == row.id } },
             updateSettings: { change in change(&state.settings) })
+        intents.checkForUpdates = { state.updates?.phase = .checking }
+        intents.setChecksForUpdatesAutomatically = { state.updates?.checksAutomatically = $0 }
+        return intents
     }
 
     @MainActor private static func state(for scene: Scene) -> NudgeState {
@@ -212,6 +219,14 @@ struct GalleryView: View {
         case .dropdownSnoozed: s = .sample(.snoozed)
         case .dropdownEmpty: s = .sample(.empty)
         case .dropdownNotice: s = .sample(.notice)
+        case .settingsAboutChecking, .settingsAboutUpToDate, .settingsAboutAvailable, .settingsAboutFailed:
+            s = .sample(.mixed)
+            s.updates?.phase = switch scene {
+            case .settingsAboutChecking: .checking
+            case .settingsAboutUpToDate: .upToDate
+            case .settingsAboutAvailable: .available(version: "0.5.0")
+            default: .failed(message: "Couldn't reach GitHub. Check your connection.")
+            }
         default: s = .sample(.mixed)
         }
         return s

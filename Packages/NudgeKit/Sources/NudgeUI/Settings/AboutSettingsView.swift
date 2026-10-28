@@ -4,6 +4,7 @@ import SwiftUI
 
 struct AboutSettingsView: View {
     let state: NudgeState
+    let intents: NudgeIntents
 
     private var version: String {
         let info = Bundle.main.infoDictionary
@@ -25,12 +26,23 @@ struct AboutSettingsView: View {
                         // The wordmark: lowercase, rounded black.
                         Text("nudge").font(.system(size: 26, weight: .black, design: .rounded)).accessibilityLabel("Nudge")
                         Text("Version \(version)").font(Tokens.Typo.rowSubtitle).foregroundStyle(Tokens.Palette.settingsSecondary)
+                        if let updates = state.updates { UpdateLine(status: updates) }
                     }
                     Spacer()
+                    if let updates = state.updates { updateButton(updates.phase) }
                     Link(destination: URL(string: "https://github.com/foobarnes/nudge")!) {
                         Label("Source on GitHub", systemImage: "arrow.up.right")
                     }
                     .buttonStyle(SettingsButtonStyle())
+                }
+                if let updates = state.updates {
+                    Divider().overlay(.white.opacity(0.07)).padding(.top, 14).padding(.bottom, 6)
+                    SettingsRow(title: "Check for updates automatically",
+                                note: "Nudge checks hourly, then installs and relaunches in about a second.") {
+                        Toggle("Check for updates automatically", isOn: Binding(
+                            get: { updates.checksAutomatically }, set: { intents.setChecksForUpdatesAutomatically($0) }))
+                            .labelsHidden().toggleStyle(.switch).controlSize(.small)
+                    }
                 }
             }
             SettingsCard {
@@ -47,5 +59,47 @@ struct AboutSettingsView: View {
                 }
             }
         }
+    }
+
+    @ViewBuilder private func updateButton(_ phase: UpdateStatus.Phase) -> some View {
+        switch phase {
+        case .available:
+            Button("Update", action: intents.installUpdate).buttonStyle(SettingsButtonStyle(prominent: true))
+        case .failed:
+            Button("Try Again", action: intents.checkForUpdates).buttonStyle(SettingsButtonStyle())
+        default:
+            Button("Check for Updates", action: intents.checkForUpdates)
+                .buttonStyle(SettingsButtonStyle())
+                .disabled(phase == .checking)
+                .opacity(phase == .checking ? 0.5 : 1)
+        }
+    }
+}
+
+/// One line under the version: what the last update check found.
+private struct UpdateLine: View {
+    let status: UpdateStatus
+
+    var body: some View {
+        HStack(spacing: 6) {
+            switch status.phase {
+            case .idle:
+                if let date = status.lastChecked { Text("Last checked \(Format.ago(date))") }
+            case .checking:
+                ProgressView().controlSize(.mini)
+                Text("Checking for updates…")
+            case .upToDate:
+                Image(systemName: "checkmark.circle.fill").foregroundStyle(Tokens.Palette.ok)
+                Text("You're on the latest version")
+            case let .available(version):
+                Image(systemName: "arrow.down.circle.fill").foregroundStyle(Tokens.Palette.tokenText)
+                Text("Version \(version) is available").foregroundStyle(Tokens.Palette.settingsText)
+            case let .failed(message):
+                Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(Tokens.Tier.text(.amber))
+                Text(message).lineLimit(1).truncationMode(.tail)
+            }
+        }
+        .font(Tokens.Typo.rowSubtitle)
+        .foregroundStyle(Tokens.Palette.settingsSecondary)
     }
 }
