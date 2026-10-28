@@ -226,7 +226,7 @@ private struct ActionEditor: View {
                 if action.kind == .terminal {
                     HStack(spacing: 6) {
                         Text("Opens in").font(Tokens.Typo.settingsBody).foregroundStyle(Color(hex: 0xD6D6DB))
-                        SettingsChip(terminal == .ghostty ? "Ghostty" : "Terminal")
+                        SettingsChip(terminal.title)
                     }
                     .fixedSize()
                 }

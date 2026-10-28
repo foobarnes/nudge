@@ -1,3 +1,4 @@
+import AppKit
 import NudgeCore
 import SwiftUI
 
@@ -8,6 +9,13 @@ struct GeneralSettingsView: View {
     @State private var redText = ""
 
     private var settings: NudgeSettings { state.settings }
+
+    /// Supported terminals that are installed, plus the current choice so the picker never shows a blank.
+    private var installedTerminals: [TerminalApp] {
+        TerminalApp.allCases.filter {
+            $0 == settings.terminalApp || NSWorkspace.shared.urlForApplication(withBundleIdentifier: $0.bundleID) != nil
+        }
+    }
 
     var body: some View {
         ScrollView {
@@ -74,10 +82,9 @@ struct GeneralSettingsView: View {
                         .labelsHidden().frame(width: 190)
                     }
                     Divider().overlay(.white.opacity(0.07))
-                    SettingsRow(title: "Terminal app", note: "Terminal actions open here. Terminal.app needs Automation permission.") {
+                    SettingsRow(title: "Terminal app", note: "Terminal actions open here. Lists the supported terminals you have installed. Terminal.app needs Automation permission.") {
                         Picker("Terminal app", selection: intents.setting(\.terminalApp, from: state)) {
-                            Text("Ghostty").tag(TerminalApp.ghostty)
-                            Text("Terminal").tag(TerminalApp.terminal)
+                            ForEach(installedTerminals, id: \.self) { Text($0.title).tag($0) }
                         }
                         .labelsHidden().frame(width: 190)
                     }

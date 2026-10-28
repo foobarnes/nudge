@@ -86,12 +86,13 @@ final class ActionRunner {
     private func openInTerminal(_ script: URL, actionName: String) {
         switch state.settings.terminalApp {
         case .ghostty: openInGhostty(script, actionName: actionName)
+        case .cmux: openInCmux(script, actionName: actionName)
         case .terminal: openInTerminalApp(script, actionName: actionName)
         }
     }
 
     private func openInGhostty(_ script: URL, actionName: String) {
-        guard let app = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.mitchellh.ghostty") else {
+        guard let app = NSWorkspace.shared.urlForApplication(withBundleIdentifier: TerminalApp.ghostty.bundleID) else {
             alerts.alert(title: "“\(actionName)” needs Ghostty",
                          body: "Ghostty isn't installed. Install it or pick Terminal in Settings › General.")
             return
@@ -110,8 +111,46 @@ final class ActionRunner {
         }
     }
 
+    /// A new cmux workspace named after the action, via cmux's bundled CLI. Launches cmux first if needed and
+    /// retries while its socket comes up.
+    private func openInCmux(_ script: URL, actionName: String) {
+        guard let app = NSWorkspace.shared.urlForApplication(withBundleIdentifier: TerminalApp.cmux.bundleID) else {
+            alerts.alert(title: "“\(actionName)” needs cmux",
+                         body: "cmux isn't installed. Install it or pick another terminal in Settings › General.")
+            return
+        }
+        let cli = app.appendingPathComponent("Contents/Resources/bin/cmux")
+        let quoted = "'" + script.path.replacingOccurrences(of: "'", with: "'\\''") + "'"
+        let arguments = ["workspace", "create", "--name", actionName, "--command", "/bin/zsh -l \(quoted)", "--focus", "true"]
+        let alerts = self.alerts
+        Task {
+            let configuration = NSWorkspace.OpenConfiguration()
+            _ = try? await NSWorkspace.shared.openApplication(at: app, configuration: configuration)   // launch + front
+            var status: Int32 = -1
+            for _ in 0..<10 {
+                status = await Self.run(cli, arguments)
+                if status == 0 { return }
+                try? await Task.sleep(for: .milliseconds(500))
+            }
+            alerts.alert(title: "“\(actionName)” failed", body: "cmux didn't open a workspace (exit \(status)).")
+        }
+    }
+
+    private nonisolated static func run(_ executable: URL, _ arguments: [String]) async -> Int32 {
+        await withCheckedContinuation { continuation in
+            let process = Process()
+            process.executableURL = executable
+            process.arguments = arguments
+            process.environment = ProcessInfo.processInfo.environment.merging(["CMUX_QUIET": "1"]) { $1 }
+            process.standardOutput = FileHandle.nullDevice
+            process.standardError = FileHandle.nullDevice
+            process.terminationHandler = { continuation.resume(returning: $0.terminationStatus) }
+            do { try process.run() } catch { continuation.resume(returning: -1) }
+        }
+    }
+
     private func openInTerminalApp(_ script: URL, actionName: String) {
-        guard NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.apple.Terminal") != nil else {
+        guard NSWorkspace.shared.urlForApplication(withBundleIdentifier: TerminalApp.terminal.bundleID) != nil else {
             alerts.alert(title: "“\(actionName)” needs Terminal", body: "Terminal isn't installed.")
             return
         }
