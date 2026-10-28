@@ -216,7 +216,7 @@ struct SettingsButtonStyle: ButtonStyle {
     }
 
     private func fill(_ pressed: Bool) -> Color {
-        if prominent { return pressed || hovered ? Color(hex: 0x0858BB) : Tokens.Palette.accent }
+        if prominent { return pressed || hovered ? Tokens.Palette.accentPressed : Tokens.Palette.accent }
         return .white.opacity(pressed ? 0.22 : hovered ? 0.18 : 0.14)
     }
 }

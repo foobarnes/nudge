@@ -30,7 +30,7 @@ struct MiniButtonStyle: ButtonStyle {
 
     private func fill(pressed: Bool) -> Color {
         switch role {
-        case .primary: pressed || hovered ? Color(hex: 0x0858BB) : Tokens.Palette.accent
+        case .primary: pressed || hovered ? Tokens.Palette.accentPressed : Tokens.Palette.accent
         case .normal: pressed ? Tokens.Palette.fillStrong : hovered ? Tokens.Palette.fillHover : Tokens.Palette.fill
         case .plain: pressed || hovered ? Tokens.Palette.fill : .clear
         }
@@ -138,6 +138,17 @@ struct NoticeLine: View {
             .padding(.horizontal, Tokens.Space.rowH).padding(.vertical, 6)
             .transition(.opacity)
             .accessibilityElement(children: .combine)
+        }
+    }
+}
+
+/// Small brand-violet dot beside "Synced 2m ago" while sync is healthy; absent when starting or stale.
+struct SyncedDot: View {
+    let status: SyncStatus
+
+    var body: some View {
+        if case .ok = status {
+            Circle().fill(Tokens.Palette.accentGlyph).frame(width: 5, height: 5).accessibilityHidden(true)
         }
     }
 }

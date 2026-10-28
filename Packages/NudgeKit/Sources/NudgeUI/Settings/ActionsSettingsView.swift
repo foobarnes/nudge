@@ -122,7 +122,7 @@ private struct ActionCardRow: View {
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .fill(selected ? Tokens.Palette.accent.opacity(0.28) : hovered ? .white.opacity(0.05) : .clear)
             if selected {
-                RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Color(hex: 0x5AA0FF).opacity(0.45), lineWidth: 1)
+                RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Color(hex: 0x8F7BFF).opacity(0.45), lineWidth: 1)
             }
         }
         .contentShape(Rectangle())
