@@ -1,0 +1,44 @@
+name: Nudge
+
+options:
+  bundleIdPrefix: io.github.foobarnes
+  deploymentTarget:
+    macOS: "26.0"
+  createIntermediateGroups: true
+
+packages:
+  NudgeKit:
+    path: Packages/NudgeKit
+
+targets:
+  Nudge:
+    type: application
+    platform: macOS
+    sources:
+      - path: App
+        excludes:
+          - "**/.DS_Store"
+    dependencies:
+      - package: NudgeKit
+        products: [NudgeCore, NudgeUI]
+    settings:
+      base:
+        PRODUCT_NAME: Nudge
+        PRODUCT_BUNDLE_IDENTIFIER: io.github.foobarnes.nudge
+        INFOPLIST_FILE: App/Info.plist
+        MARKETING_VERSION: "0.1.0"
+        CURRENT_PROJECT_VERSION: "1"
+        SWIFT_VERSION: "6.0"
+        SWIFT_STRICT_CONCURRENCY: complete
+        MACOSX_DEPLOYMENT_TARGET: "26.0"
+        # Ad-hoc signing until a Developer ID certificate exists (see issue #1).
+        CODE_SIGN_IDENTITY: "-"
+        CODE_SIGN_STYLE: Manual
+        DEVELOPMENT_TEAM: ""
+        ENABLE_HARDENED_RUNTIME: NO
+        # Unsandboxed: Nudge spawns `gh`, terminals, and user scripts.
+        ENABLE_APP_SANDBOX: NO
+        DEAD_CODE_STRIPPING: YES
+      configs:
+        Debug:
+          SWIFT_ACTIVE_COMPILATION_CONDITIONS: DEBUG

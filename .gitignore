@@ -6,3 +6,4 @@ build/
 *.xcworkspace/
 xcuserdata/
 .swiftpm/
+.claude/
