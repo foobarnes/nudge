@@ -38,6 +38,13 @@ import Testing
         ])) == nil)
     }
 
+    @Test func botDraftIncluded() throws {
+        let pr = try #require(try resolve(prJSON(draft: true, botAuthor: true, reviewers: [user("octocat")], events: [
+            requested("RRE_a", "2026-01-05T10:00:00Z", user("octocat")),
+        ])))
+        #expect(pr.waitingSince == iso("2026-01-05T10:00:00Z"))
+    }
+
     @Test func teamRequestOnly() throws {
         let pr = try #require(try resolve(prJSON(reviewers: [team("acme", "backend")], events: [
             requested("RRE_t1", "2026-01-05T09:00:00Z", team("acme", "backend")),

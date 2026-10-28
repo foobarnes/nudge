@@ -64,13 +64,26 @@ struct PRNode: Decodable, Sendable {
     struct Repository: Decodable, Sendable { let nameWithOwner: String }
     struct Timeline: Decodable, Sendable { let nodes: [TimelineItem?] }
 
+    struct Author: Decodable, Sendable {
+        let login: String
+        let isBot: Bool
+
+        private enum Keys: String, CodingKey { case __typename, login }
+
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: Keys.self)
+            login = try c.decode(String.self, forKey: .login)
+            isBot = try c.decodeIfPresent(String.self, forKey: .__typename) == "Bot"
+        }
+    }
+
     let id: String
     let number: Int
     let title: String
     let url: URL
     let isDraft: Bool
     let headRefName: String
-    let author: LoginNode?
+    let author: Author?
     let repository: Repository
     var reviewRequests: ReviewRequests
     let timelineItems: Timeline

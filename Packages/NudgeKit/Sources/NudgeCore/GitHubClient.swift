@@ -193,7 +193,7 @@ struct GitHubClient: Sendable {
         issueCount
         pageInfo { hasNextPage endCursor }
         nodes { ... on PullRequest {
-          id number title url isDraft headRefName author { login }
+          id number title url isDraft headRefName author { __typename login }
           repository { nameWithOwner }
           reviewRequests(first: 100) { pageInfo { hasNextPage endCursor } nodes { requestedReviewer {
             __typename ... on User { login } ... on Team { slug organization { login } } } } }
