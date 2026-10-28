@@ -67,6 +67,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if let seconds = launch.expandAfter {
             after(seconds) { [weak self] in self?.pill.setExpandedForTesting(true) }
         }
+        if let interval = launch.snapEvery {
+            Task { @MainActor [weak self] in
+                for i in 0..<6 {
+                    try? await Task.sleep(for: .seconds(interval))
+                    guard let vf = self?.pill.screenForTesting?.visibleFrame else { return }
+                    let x = i.isMultiple(of: 2) ? vf.minX + 120 : vf.maxX - 600
+                    self?.pill.dropForTesting(at: NSPoint(x: x, y: vf.minY + 40))
+                }
+            }
+        }
         if let interval = launch.toggleEvery {
             Task { @MainActor [weak self] in
                 for i in 0..<20 {
@@ -106,6 +116,8 @@ struct LaunchOptions {
     /// toggle it 20 times, for hang and CPU checks.
     var expandAfter: Double?
     var toggleEvery: Double?
+    /// `-NudgeSnapEvery <seconds>`: drop the pill mid-screen and let it snap, 6 times.
+    var snapEvery: Double?
 
     init(defaults: UserDefaults = .standard) {
         #if DEBUG
@@ -114,6 +126,7 @@ struct LaunchOptions {
         open = defaults.string(forKey: "NudgeOpen")
         if defaults.object(forKey: "NudgeExpandAfter") != nil { expandAfter = defaults.double(forKey: "NudgeExpandAfter") }
         if defaults.object(forKey: "NudgeToggleEvery") != nil { toggleEvery = defaults.double(forKey: "NudgeToggleEvery") }
+        if defaults.object(forKey: "NudgeSnapEvery") != nil { snapEvery = defaults.double(forKey: "NudgeSnapEvery") }
         #endif
     }
 }

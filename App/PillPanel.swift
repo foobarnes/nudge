@@ -64,6 +64,10 @@ final class PillController: NSObject, NSWindowDelegate {
     private var settleTask: Task<Void, Never>?
     private var dimTask: Task<Void, Never>?
     private var hideTask: Task<Void, Never>?
+    private var glideLink: CADisplayLink?
+    private var glideFrom = NSPoint.zero
+    private var glideTo = NSPoint.zero
+    private var glideStart: CFTimeInterval = 0
 
     init(state: NudgeState, intents: NudgeIntents, statusItemScreen: @escaping @MainActor () -> NSScreen?) {
         self.state = state
@@ -132,9 +136,8 @@ final class PillController: NSObject, NSWindowDelegate {
                 switch event.type {
                 case .leftMouseDown:
                     guard event.window === self.panel, !event.modifierFlags.contains(.control) else { return false }
+                    self.stopGlide()
                     self.drag = Drag(start: mouse, origin: self.panel.frame.origin)
-                    self.panel.allowKey = true
-                    self.panel.makeKey()
                     return false
                 case .leftMouseDragged:
                     guard var drag = self.drag else { return false }
@@ -142,13 +145,21 @@ final class PillController: NSObject, NSWindowDelegate {
                     drag.moving = true
                     self.drag = drag
                     self.settleTask?.cancel()
+                    self.entryTask?.cancel()
+                    self.exitTask?.cancel()
                     self.panel.setFrameOrigin(NSPoint(x: drag.origin.x + mouse.x - drag.start.x,
                                                       y: drag.origin.y + mouse.y - drag.start.y))
                     return true
                 default:
                     let moved = self.drag?.moving == true
                     self.drag = nil
-                    if moved { self.snap() }
+                    if moved {
+                        self.snap()
+                    } else {
+                        // A click, not a drag: key so Esc works. Becoming key mid-drag restyles the glass.
+                        self.panel.allowKey = true
+                        self.panel.makeKey()
+                    }
                     return moved
                 }
             }
@@ -247,6 +258,7 @@ final class PillController: NSObject, NSWindowDelegate {
 
     private func mouseEntered() {
         exitTask?.cancel()
+        guard drag?.moving != true, glideLink == nil else { return }
         guard panel.isVisible, !hoverSuppressed else { return }
         // While a collapse settles the window is still card-sized; only the capsule itself expands the pill.
         if !state.pillExpanded, !capsuleContains(NSEvent.mouseLocation) {
@@ -270,6 +282,7 @@ final class PillController: NSObject, NSWindowDelegate {
     private func mouseExited() {
         exitTask?.cancel()
         entryTask?.cancel()
+        guard drag?.moving != true, glideLink == nil else { return }
         exitTask = after(0.15) { [weak self] in
             guard let self, !self.mouseInside else { return }
             self.hoverSuppressed = false
@@ -289,6 +302,14 @@ final class PillController: NSObject, NSWindowDelegate {
         testingHold = expanded          // the pointer isn't over the pill, so don't auto-collapse
         hoverSuppressed = !expanded
         setExpanded(expanded)
+    }
+
+    /// DEBUG: drop the pill at a point (as if dragged there) and let it snap, for checks without a pointer.
+    var screenForTesting: NSScreen? { panel.screen }
+
+    func dropForTesting(at point: NSPoint) {
+        panel.setFrameOrigin(point)
+        snap()
     }
 
     private func collapseIfOutside() {
@@ -430,6 +451,39 @@ final class PillController: NSObject, NSWindowDelegate {
         return NSPoint(x: corner.x + dx, y: corner.y + dy)
     }
 
+    /// Springs the window's origin to `target` one display frame at a time. `NSAnimationContext` frame animations
+    /// only land a few frames on this panel (each step relays out and redraws the glass), so the snap jumped.
+    private func glide(to target: NSPoint) {
+        glideLink?.invalidate()
+        glideFrom = panel.frame.origin
+        glideTo = target
+        glideStart = CACurrentMediaTime()
+        let link = panel.displayLink(target: self, selector: #selector(glideStep(_:)))
+        link.add(to: .main, forMode: .common)
+        glideLink = link
+    }
+
+    @objc private func glideStep(_ link: CADisplayLink) {
+        // Underdamped spring (response 0.4 s, damping 0.8): a slight overshoot, settled in about half a second.
+        let t = CACurrentMediaTime() - glideStart
+        let omega = 2 * Double.pi / 0.4, zeta = 0.8
+        let wd = omega * (1 - zeta * zeta).squareRoot()
+        let p = 1 - exp(-zeta * omega * t) * (cos(wd * t) + zeta * omega / wd * sin(wd * t))
+        let done = t >= 0.7
+        let k = done ? 1 : CGFloat(p)
+        panel.setFrameOrigin(NSPoint(x: glideFrom.x + (glideTo.x - glideFrom.x) * k,
+                                     y: glideFrom.y + (glideTo.y - glideFrom.y) * k))
+        if done {
+            stopGlide()
+            collapseIfOutside()   // hover exits were held while the window moved
+        }
+    }
+
+    private func stopGlide() {
+        glideLink?.invalidate()
+        glideLink = nil
+    }
+
     /// On drag end: spring to the nearest edge of the current display (12 pt inset) and remember the spot.
     private func snap() {
         // Re-derive the corner from where the window was dropped, then fit the window to the content.
@@ -466,13 +520,9 @@ final class PillController: NSObject, NSWindowDelegate {
 
         let frame = target.insetBy(dx: -m, dy: -m)
         if reduceMotion {
-            panel.setFrame(frame, display: true)
+            panel.setFrameOrigin(frame.origin)
         } else {
-            NSAnimationContext.runAnimationGroup { ctx in
-                ctx.duration = 0.35
-                ctx.timingFunction = CAMediaTimingFunction(controlPoints: 0.2, 1.2, 0.4, 1)   // slight spring overshoot
-                panel.animator().setFrame(frame, display: true)
-            }
+            glide(to: frame.origin)
         }
         saveAnchor(PillAnchor(trailing: trailing, top: top, fx: (corner.x - vf.minX) / vf.width,
                               fy: (corner.y - vf.minY) / vf.height, edge: edge, savedAt: Date()))
