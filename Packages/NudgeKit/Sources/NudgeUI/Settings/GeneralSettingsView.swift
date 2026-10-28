@@ -38,6 +38,11 @@ struct GeneralSettingsView: View {
                         Toggle("Launch at login", isOn: intents.setting(\.launchAtLogin, from: state))
                             .labelsHidden().toggleStyle(.switch).controlSize(.small)
                     }
+                    Divider().overlay(.white.opacity(0.07))
+                    SettingsRow(title: "Show Nudge in the Dock", note: "Only while Settings is open. Off keeps Nudge in the menu bar alone.") {
+                        Toggle("Show Nudge in the Dock", isOn: intents.setting(\.showInDock, from: state))
+                            .labelsHidden().toggleStyle(.switch).controlSize(.small)
+                    }
                 }
 
                 SettingsCard {

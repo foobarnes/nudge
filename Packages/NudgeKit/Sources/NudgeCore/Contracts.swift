@@ -146,6 +146,8 @@ public struct ReviewAction: Codable, Identifiable, Hashable, Sendable {
 public struct NudgeSettings: Codable, Hashable, Sendable {
     public var displayMode: DisplayMode = .auto
     public var launchAtLogin = false
+    /// Off keeps Nudge out of the Dock and the menu bar even while Settings is open.
+    public var showInDock = true
     public var workHours = WorkHoursConfig()
     public var thresholds = TierThresholds()
     public var terminalApp: TerminalApp = .ghostty
@@ -156,6 +158,27 @@ public struct NudgeSettings: Codable, Hashable, Sendable {
     public var actions: [ReviewAction] = [.viewDiff]
     public var allowedURLSchemes: [String] = []
     public init() {}
+
+    /// Missing keys take their defaults, so settings saved before a field existed still load.
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        let d = NudgeSettings()
+        func value<T: Decodable>(_ key: CodingKeys, _ fallback: T) throws -> T {
+            try c.decodeIfPresent(T.self, forKey: key) ?? fallback
+        }
+        displayMode = try value(.displayMode, d.displayMode)
+        launchAtLogin = try value(.launchAtLogin, d.launchAtLogin)
+        showInDock = try value(.showInDock, d.showInDock)
+        workHours = try value(.workHours, d.workHours)
+        thresholds = try value(.thresholds, d.thresholds)
+        terminalApp = try value(.terminalApp, d.terminalApp)
+        defaultSnooze = try value(.defaultSnooze, d.defaultSnooze)
+        lastCustomSnoozeText = try c.decodeIfPresent(String.self, forKey: .lastCustomSnoozeText)
+        orgRules = try value(.orgRules, d.orgRules)
+        repoRules = try value(.repoRules, d.repoRules)
+        actions = try value(.actions, d.actions)
+        allowedURLSchemes = try value(.allowedURLSchemes, d.allowedURLSchemes)
+    }
 }
 
 // MARK: - View-facing state
