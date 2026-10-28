@@ -81,7 +81,11 @@ public struct DropdownView: View {
                 Text(title).font(Tokens.Typo.heading)
                     .contentTransition(.numericText())
                     .motion(Motion.roll, value: state.rows.count)
-                Text(state.status.syncedLabel).font(Tokens.Typo.caption).foregroundStyle(Tokens.Palette.secondary)
+                HStack(spacing: 5) {
+                    SyncedDot(status: state.status)
+                    Text(state.status.syncedLabel)
+                }
+                .font(Tokens.Typo.caption).foregroundStyle(Tokens.Palette.secondary)
             }
             Spacer()
             Button { intents.syncNow() } label: { Label("Sync", systemImage: "arrow.clockwise") }
@@ -116,7 +120,7 @@ public struct DropdownView: View {
             .background(Tokens.Palette.fill, in: RoundedRectangle(cornerRadius: Tokens.Radius.row, style: .continuous))
         } else if state.status != .starting {
             HStack(spacing: 8) {
-                Image(systemName: "sparkles").foregroundStyle(Tokens.Palette.sparkle)
+                Image(systemName: "sparkles").foregroundStyle(Tokens.Palette.accentGlyph)
                 Text("All clear").font(Tokens.Typo.rowTitle)
                 Spacer()
             }

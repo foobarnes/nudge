@@ -66,13 +66,13 @@ struct IconButtonStyle: ButtonStyle {
         }
     }
 
-    /// Only Start is filled blue; its chevron segment is a lighter blue so it reads as the same button. Neutral
+    /// Only Start is filled violet; its chevron segment is a lighter violet so it reads as the same button. Neutral
     /// fills use the row's foreground at ~11% so they still read on a tinted amber or red row.
     private func fill(_ pressed: Bool) -> Color {
         let active = pressed || hovered
         switch role {
         case .accent:
-            let base = active ? Color(hex: 0x0858BB) : Tokens.Palette.accent
+            let base = active ? Tokens.Palette.accentPressed : Tokens.Palette.accent
             return side == .trailing ? base.opacity(0.8) : base
         case .normal, .secondary:
             return Tokens.Palette.text.opacity(pressed ? 0.22 : hovered ? 0.17 : 0.11)

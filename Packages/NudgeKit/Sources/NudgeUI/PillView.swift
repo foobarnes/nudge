@@ -188,7 +188,7 @@ public struct PillView: View {
         capsule {
             Image(systemName: "sparkles")
                 .font(.system(size: 17, weight: .bold))
-                .foregroundStyle(Tokens.Palette.sparkle)
+                .foregroundStyle(Tokens.Palette.accentGlyph)
                 .symbolEffect(.bounce, options: reduceMotion ? .nonRepeating.speed(0) : .nonRepeating, value: zero)
             Text("All clear").font(Tokens.Typo.pillCount)
         }
@@ -259,6 +259,7 @@ public struct PillView: View {
                     Text(problem.fix ?? problem.message).foregroundStyle(Tokens.Palette.warning)
                     Text("·")
                 }
+                SyncedDot(status: state.status)
                 Text(state.status.syncedLabel)
                 if state.resultsCapped {
                     Text("· 200+ results, some may be missing").foregroundStyle(Tokens.Palette.warning)

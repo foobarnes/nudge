@@ -14,8 +14,12 @@ enum Tokens {
         static let fillHover = dynamic(light: .black, 0.09, dark: .white, 0.14)
         static let fillStrong = dynamic(light: .black, 0.12, dark: .white, 0.18)
         static let segmentOn = dynamic(light: .white, 1, dark: .white, 0.2)
-        static let accent = Color(hex: 0x0A66D8)
-        static let sparkle = Color(hex: 0xFFB800)
+        /// Brand violet, for fills under white text (4.6:1). Stays put in dark mode: the lighter #8F7BFF would drop
+        /// white text to 3.3:1. Not `Color.accentColor`, which follows the system accent unless it's Multicolor.
+        static let accent = Color(hex: 0x7457FF)
+        static let accentPressed = Color(hex: 0x5E41EE)
+        /// Brand violet as a glyph color on glass (sparkles, the synced dot).
+        static let accentGlyph = dynamic(light: 0x7457FF, dark: 0x8F7BFF)
         static let check = Color(hex: 0x1F9D55)
         static let warning = dynamic(light: 0xA84D07, dark: 0xFFB35C)
         /// Sits between the glass and the pill's content: lifts light glass a little, darkens dark glass so the
@@ -34,9 +38,9 @@ enum Tokens {
         static let settingsCardEdge = Color.white.opacity(0.09)
         static let settingsField = Color.black.opacity(0.28)
         static let settingsFieldEdge = Color.white.opacity(0.14)
-        static let settingsSelected = Color.white.opacity(0.14)
-        static let tokenChip = Color(hex: 0x5AA0FF).opacity(0.22)
-        static let tokenText = Color(hex: 0xA9CBFF)
+        static let settingsSelected = Color(hex: 0x8F7BFF).opacity(0.24)
+        static let tokenChip = Color(hex: 0x8F7BFF).opacity(0.22)
+        static let tokenText = Color(hex: 0xC9BFFF)
         static let ok = Color(hex: 0x9FE870)
     }
 
