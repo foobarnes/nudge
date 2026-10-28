@@ -269,14 +269,30 @@ struct ValidationNote: View {
 struct Avatar: View {
     let login: String
     var size: CGFloat = 30
+    @State private var image: NSImage?
 
     var body: some View {
-        Text(String(login.prefix(1)).uppercased())
-            .font(.system(size: size * 0.44, weight: .heavy, design: .rounded))
-            .foregroundStyle(.white)
-            .frame(width: size, height: size)
-            .background(color, in: RoundedRectangle(cornerRadius: size * 0.3, style: .continuous))
-            .accessibilityHidden(true)
+        let shape = RoundedRectangle(cornerRadius: size * 0.3, style: .continuous)
+        Group {
+            if let image {
+                Image(nsImage: image).resizable().interpolation(.high)
+            } else {
+                // Letter fallback while loading, signed out, or when GitHub has no avatar for this login.
+                Text(String(login.prefix(1)).uppercased())
+                    .font(.system(size: size * 0.44, weight: .heavy, design: .rounded))
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(color)
+            }
+        }
+        .frame(width: size, height: size)
+        .clipShape(shape)
+        .accessibilityHidden(true)
+        .task(id: login) {
+            image = nil
+            guard login != "?" else { return }
+            image = await AvatarCache.shared.image(for: login)
+        }
     }
 
     private var color: Color {
