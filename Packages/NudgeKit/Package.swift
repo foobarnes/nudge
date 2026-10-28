@@ -17,5 +17,6 @@ let package = Package(
             dependencies: ["NudgeCore"],
             resources: [.copy("Fixtures")]
         ),
+        .testTarget(name: "NudgeUITests", dependencies: ["NudgeUI"]),
     ]
 )
