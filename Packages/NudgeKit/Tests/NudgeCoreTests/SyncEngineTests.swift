@@ -101,7 +101,7 @@ import Testing
             if failing.withLock({ $0 }) { throw URLError(.timedOut) }
             return try ok(op, vars, token)
         }
-        #expect(await engine.nextDelay() == 60)
+        #expect(await engine.nextDelay() == 15)
         var delays: [TimeInterval] = []
         for _ in 0..<4 {
             await engine.trigger(.timer)
@@ -111,7 +111,7 @@ import Testing
         #expect(updates.errors == Array(repeating: .offline, count: 4))
         failing.withLock { $0 = false }
         await engine.trigger(.timer)
-        #expect(await engine.nextDelay() == 60)
+        #expect(await engine.nextDelay() == 15)
     }
 
     @Test func rateLimitBlocksUntilReset() async {

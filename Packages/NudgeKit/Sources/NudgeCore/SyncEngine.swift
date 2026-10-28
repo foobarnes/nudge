@@ -20,7 +20,7 @@ enum SyncUpdate: Sendable {
 actor SyncEngine {
     enum Trigger: Sendable { case launch, timer, wake, manual }
 
-    static let interval: TimeInterval = 60
+    static let interval: TimeInterval = 15
     static let backoff: [TimeInterval] = [60, 120, 300]
     static let manualCooldown: TimeInterval = 10
     static let teamCacheTTL: TimeInterval = 3600
@@ -50,7 +50,7 @@ actor SyncEngine {
         loop = Task { [weak self] in
             await self?.trigger(.launch)
             while !Task.isCancelled, let delay = await self?.nextDelay() {
-                try? await Task.sleep(for: .seconds(delay), tolerance: .seconds(10))
+                try? await Task.sleep(for: .seconds(delay), tolerance: .seconds(3))
                 guard !Task.isCancelled else { return }
                 await self?.trigger(.timer)
             }
@@ -82,7 +82,7 @@ actor SyncEngine {
         inFlight = false
     }
 
-    /// 60s normally; 60s → 2m → 5m after consecutive failures; never before a rate-limit reset.
+    /// 15s normally; 60s → 2m → 5m after consecutive failures; never before a rate-limit reset.
     func nextDelay() -> TimeInterval {
         let base = failures == 0 ? Self.interval : Self.backoff[min(failures, Self.backoff.count) - 1]
         guard let blockedUntil else { return base }
