@@ -183,15 +183,7 @@ private struct ActionEditor: View {
                 }
             }
             HStack(alignment: .top, spacing: 12) {
-                field("Symbol") {
-                    HStack(spacing: 8) {
-                        TextField("SF Symbol name", text: $action.symbol).textFieldStyle(SettingsFieldStyle())
-                        Image(systemName: action.symbol.isEmpty ? "questionmark" : action.symbol)
-                            .font(.system(size: 14, weight: .semibold))
-                            .frame(width: 36, height: 36)
-                            .background(Tokens.Palette.settingsField, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                    }
-                }
+                field("Symbol") { SymbolPicker(symbol: $action.symbol) }
                 if action.kind == .openURL {
                     field("Allowed URL schemes") {
                         TextField("https, diagram", text: $schemesText)
