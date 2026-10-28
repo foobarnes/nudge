@@ -172,7 +172,6 @@ public struct PillView: View {
         .motion(Motion.chip, value: state.isOffHours)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(collapsedLabel(oldest))
-        .contextMenu { PillContextMenu(state: state, intents: intents) }
     }
 
     private func problemCapsule(_ problem: SyncProblem) -> some View {

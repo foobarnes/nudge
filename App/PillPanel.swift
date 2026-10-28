@@ -68,6 +68,10 @@ final class PillController: NSObject, NSWindowDelegate {
     private var glideFrom = NSPoint.zero
     private var glideTo = NSPoint.zero
     private var glideStart: CFTimeInterval = 0
+    /// The card is showing (hover sets `pillExpanded` even with no rows, when the capsule stays put).
+    private var cardOpen: Bool { state.pillExpanded && !state.rows.isEmpty }
+    /// Builds the app menu for a right-click on the collapsed pill.
+    var contextMenu: (@MainActor () -> NSMenu)?
 
     init(state: NudgeState, intents: NudgeIntents, statusItemScreen: @escaping @MainActor () -> NSScreen?) {
         self.state = state
@@ -127,13 +131,20 @@ final class PillController: NSObject, NSWindowDelegate {
         }
         // Click → key (so Esc works). A left drag past a few points moves the window by hand (SwiftUI content
         // defeats `isMovableByWindowBackground`, and `performDrag` doesn't track here), then snaps on mouse-up.
-        // Right-clicks and control-clicks pass straight to SwiftUI's context menu: no key, no drag, no snap.
-        // Local monitors only see Nudge's own events.
-        NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .leftMouseDragged, .leftMouseUp]) {
+        // A right-click or control-click on the collapsed pill shows the app menu (the status item's); on the open
+        // card it passes to SwiftUI, so rows keep their own menus. Local monitors only see Nudge's own events.
+        NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .leftMouseDragged, .leftMouseUp, .rightMouseDown]) {
             [weak self] event in
             let consumed = MainActor.assumeIsolated { () -> Bool in
                 guard let self else { return false }
                 let mouse = NSEvent.mouseLocation
+                let contextClick = event.type == .rightMouseDown || event.modifierFlags.contains(.control)
+                if contextClick, event.type != .leftMouseUp, event.type != .leftMouseDragged {
+                    guard event.window === self.panel, !self.cardOpen, let menu = self.contextMenu?(),
+                          let view = self.panel.contentView else { return false }
+                    NSMenu.popUpContextMenu(menu, with: event, for: view)
+                    return true
+                }
                 switch event.type {
                 case .leftMouseDown:
                     guard event.window === self.panel, !event.modifierFlags.contains(.control) else { return false }

@@ -58,6 +58,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         engine.start()
         if let mode = launch.displayMode { state.settings.displayMode = mode }   // DEBUG only; not persisted
         launchAtLogin.start()
+        pill.contextMenu = { [weak self] in self?.statusItem.makeMenu() ?? NSMenu() }
         pill.start()
         notifications.authorize()
         switch launch.open {

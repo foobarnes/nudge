@@ -60,6 +60,11 @@ final class StatusItemController {
 
     private func showMenu() {
         guard let button = item.button else { return }
+        makeMenu().popUp(positioning: nil, at: NSPoint(x: 0, y: button.bounds.height + 4), in: button)
+    }
+
+    /// The app menu, shared by this item and a right-click on the collapsed pill.
+    func makeMenu() -> NSMenu {
         let menu = NSMenu()
         menu.addItem(MenuAction("Open List") { [intents] in intents.openDropdown() })
         if pill.isShown {
@@ -86,7 +91,7 @@ final class StatusItemController {
         }
         menu.addItem(MenuAction("Quit Nudge", key: "q") { [intents] in intents.quit() })
         menu.autoenablesItems = false
-        menu.popUp(positioning: nil, at: NSPoint(x: 0, y: button.bounds.height + 4), in: button)
+        return menu
     }
 
     private struct Appearance: Equatable, Sendable {
