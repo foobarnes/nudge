@@ -24,6 +24,16 @@
 	<true/>
 	<key>NSAppleEventsUsageDescription</key>
 	<string>Nudge opens Terminal to run the review actions you set up.</string>
+	<key>SUFeedURL</key>
+	<string>https://github.com/foobarnes/nudge/releases/latest/download/appcast.xml</string>
+	<key>SUPublicEDKey</key>
+	<string>$(SPARKLE_PUBLIC_KEY)</string>
+	<key>SUEnableAutomaticChecks</key>
+	<true/>
+	<key>SUAutomaticallyUpdate</key>
+	<true/>
+	<key>SUScheduledCheckInterval</key>
+	<integer>3600</integer>
 	<key>NSHumanReadableCopyright</key>
 	<string>MIT License</string>
 </dict>

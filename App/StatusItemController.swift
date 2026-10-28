@@ -9,13 +9,16 @@ final class StatusItemController {
     private let state: NudgeState
     private let intents: NudgeIntents
     private let pill: PillController
+    private let updater: Updater
     private let onClick: @MainActor () -> Void
     private var minuteTimer: Timer?
 
-    init(state: NudgeState, intents: NudgeIntents, pill: PillController, onClick: @escaping @MainActor () -> Void) {
+    init(state: NudgeState, intents: NudgeIntents, pill: PillController, updater: Updater,
+         onClick: @escaping @MainActor () -> Void) {
         self.state = state
         self.intents = intents
         self.pill = pill
+        self.updater = updater
         self.onClick = onClick
         guard let button = item.button else { return }
         button.imagePosition = .imageLeading
@@ -78,6 +81,9 @@ final class StatusItemController {
         menu.addItem(MenuAction("Sync Now") { [intents] in intents.syncNow() })
         menu.addItem(.separator())
         menu.addItem(MenuAction("Settings…", key: ",") { [intents] in intents.openSettings() })
+        if updater.isEnabled {
+            menu.addItem(MenuAction("Check for Updates…") { [updater] in updater.checkForUpdates() })
+        }
         menu.addItem(MenuAction("Quit Nudge", key: "q") { [intents] in intents.quit() })
         menu.autoenablesItems = false
         menu.popUp(positioning: nil, at: NSPoint(x: 0, y: button.bounds.height + 4), in: button)

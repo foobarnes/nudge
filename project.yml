@@ -9,6 +9,9 @@ options:
 packages:
   NudgeKit:
     path: Packages/NudgeKit
+  Sparkle:
+    url: https://github.com/sparkle-project/Sparkle
+    exactVersion: 2.10.1
 
 targets:
   Nudge:
@@ -21,17 +24,21 @@ targets:
     dependencies:
       - package: NudgeKit
         products: [NudgeCore, NudgeUI]
+      - package: Sparkle
     settings:
       base:
         PRODUCT_NAME: Nudge
         PRODUCT_BUNDLE_IDENTIFIER: io.github.foobarnes.nudge
         INFOPLIST_FILE: App/Info.plist
+        CODE_SIGN_ENTITLEMENTS: App/Nudge.entitlements
+        # Set by the Release workflow; empty in local builds, which turns the updater off.
+        SPARKLE_PUBLIC_KEY: ""
         MARKETING_VERSION: "0.1.0"
         CURRENT_PROJECT_VERSION: "1"
         SWIFT_VERSION: "6.0"
         SWIFT_STRICT_CONCURRENCY: complete
         MACOSX_DEPLOYMENT_TARGET: "26.0"
-        # Ad-hoc signing until a Developer ID certificate exists (see issue #1).
+        # Ad-hoc locally; the Release workflow signs with Developer ID and turns on the hardened runtime.
         CODE_SIGN_IDENTITY: "-"
         CODE_SIGN_STYLE: Manual
         DEVELOPMENT_TEAM: ""

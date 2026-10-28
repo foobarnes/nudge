@@ -7,9 +7,19 @@ pull request, and shows how long it has been waiting on you.
 - Live count-up timer per PR, running only while a review request to you is active.
 - Native notifications, per-org/repo notification rules, and custom "start review" actions.
 
-**Status:** pre-v0. The design spec lives in `docs/specs/`.
-
 Requires macOS 26+ and the [GitHub CLI](https://cli.github.com) (`gh auth login`).
+
+## Install
+
+Download the latest `Nudge-x.y.z.dmg` from [Releases](https://github.com/foobarnes/nudge/releases/latest) and drag
+Nudge to Applications. It updates itself after that.
+
+## Develop
+
+`make bootstrap` once, then `make run` (or `make run-debug`). The design spec lives in `docs/specs/`.
+
+Every merge to `main` ships a signed, notarized release with generated notes; PR titles must be Conventional Commits.
+See [docs/releasing.md](docs/releasing.md).
 
 ## License
 

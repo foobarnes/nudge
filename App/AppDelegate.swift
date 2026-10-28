@@ -14,6 +14,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var pill: PillController!
     private var settingsWindow: SettingsWindowController!
     private var launchAtLogin: LaunchAtLogin!
+    private let updater = Updater()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
@@ -43,7 +44,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         dropdown = DropdownPanel(state: state, intents: intents)
         pill = PillController(state: state, intents: intents) { [weak self] in self?.statusItem.screen }
-        statusItem = StatusItemController(state: state, intents: intents, pill: pill) { [weak self] in
+        statusItem = StatusItemController(state: state, intents: intents, pill: pill, updater: updater) { [weak self] in
             self?.toggleDropdown()
         }
         settingsWindow = SettingsWindowController(state: state, intents: intents)

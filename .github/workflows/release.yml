@@ -1,0 +1,160 @@
+name: Release
+
+# Every merge to main ships: version from the PR titles, notes from the merged PRs, a signed + notarized DMG on
+# GitHub Releases, and a Sparkle appcast that running copies of Nudge update from within the hour.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.next.outputs.version }}
+      build: ${{ steps.next.outputs.build }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: next
+        run: |
+          version=$(scripts/next-version.sh)
+          if [[ -z $version ]]; then
+            echo "Nothing new since the last release."
+            exit 0
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "build=$(git rev-list --count HEAD)" >> "$GITHUB_OUTPUT"
+          echo "Releasing $version"
+
+  release:
+    needs: version
+    if: needs.version.outputs.version != ''
+    runs-on: macos-26
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+      BUILD: ${{ needs.version.outputs.build }}
+      TAG: v${{ needs.version.outputs.version }}
+      SPARKLE_VERSION: 2.10.1
+      GH_TOKEN: ${{ github.token }}
+      DEVELOPER_ID_P12_BASE64: ${{ secrets.DEVELOPER_ID_P12_BASE64 }}
+      DEVELOPER_ID_P12_PASSWORD: ${{ secrets.DEVELOPER_ID_P12_PASSWORD }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      NOTARY_KEY_P8: ${{ secrets.NOTARY_KEY_P8 }}
+      NOTARY_KEY_ID: ${{ secrets.NOTARY_KEY_ID }}
+      NOTARY_ISSUER_ID: ${{ secrets.NOTARY_ISSUER_ID }}
+      SPARKLE_ED_PRIVATE_KEY: ${{ secrets.SPARKLE_ED_PRIVATE_KEY }}
+      SPARKLE_PUBLIC_KEY: ${{ vars.SPARKLE_PUBLIC_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check release secrets
+        run: |
+          missing=()
+          for name in DEVELOPER_ID_P12_BASE64 DEVELOPER_ID_P12_PASSWORD APPLE_TEAM_ID NOTARY_KEY_P8 NOTARY_KEY_ID \
+                      NOTARY_ISSUER_ID SPARKLE_ED_PRIVATE_KEY SPARKLE_PUBLIC_KEY; do
+            [[ -n ${!name:-} ]] || missing+=("$name")
+          done
+          if ((${#missing[@]})); then
+            echo "::error::Missing ${missing[*]}. Run scripts/setup-release-secrets.sh once (docs/releasing.md)."
+            exit 1
+          fi
+
+      - name: Install tools
+        run: |
+          brew install xcodegen
+          mkdir -p "$RUNNER_TEMP/sparkle"
+          gh release download "$SPARKLE_VERSION" -R sparkle-project/Sparkle -p "Sparkle-$SPARKLE_VERSION.tar.xz" -O - \
+            | tar -xJ -C "$RUNNER_TEMP/sparkle"
+
+      - name: Import signing certificate
+        run: |
+          keychain="$RUNNER_TEMP/signing.keychain-db"
+          password=$(uuidgen)
+          security create-keychain -p "$password" "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$password" "$keychain"
+          echo "$DEVELOPER_ID_P12_BASE64" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security import "$RUNNER_TEMP/cert.p12" -k "$keychain" -P "$DEVELOPER_ID_P12_PASSWORD" -T /usr/bin/codesign
+          rm "$RUNNER_TEMP/cert.p12"
+          security set-key-partition-list -S apple-tool:,apple: -k "$password" "$keychain" > /dev/null
+          security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
+
+      - name: Archive and export
+        run: |
+          xcodegen generate
+          xcodebuild archive -project Nudge.xcodeproj -scheme Nudge -configuration Release \
+            -archivePath build/Nudge.xcarchive -quiet \
+            MARKETING_VERSION="$VERSION" CURRENT_PROJECT_VERSION="$BUILD" SPARKLE_PUBLIC_KEY="$SPARKLE_PUBLIC_KEY" \
+            CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY="Developer ID Application" DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
+            ENABLE_HARDENED_RUNTIME=YES OTHER_CODE_SIGN_FLAGS=--timestamp
+          cat > build/ExportOptions.plist <<EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0"><dict>
+            <key>method</key><string>developer-id</string>
+            <key>signingStyle</key><string>manual</string>
+            <key>signingCertificate</key><string>Developer ID Application</string>
+            <key>teamID</key><string>$APPLE_TEAM_ID</string>
+          </dict></plist>
+          EOF
+          xcodebuild -exportArchive -archivePath build/Nudge.xcarchive -exportOptionsPlist build/ExportOptions.plist \
+            -exportPath build/export -quiet
+          codesign --verify --deep --strict build/export/Nudge.app
+
+      - name: Package DMG
+        run: |
+          mkdir build/dmg
+          cp -R build/export/Nudge.app build/dmg/
+          ln -s /Applications build/dmg/Applications
+          hdiutil create -volname Nudge -srcfolder build/dmg -fs HFS+ -format UDZO -ov "build/Nudge-$VERSION.dmg"
+          codesign --sign "Developer ID Application" --timestamp "build/Nudge-$VERSION.dmg"
+
+      - name: Notarize
+        run: |
+          echo "$NOTARY_KEY_P8" > "$RUNNER_TEMP/notary.p8"
+          auth=(--key "$RUNNER_TEMP/notary.p8" --key-id "$NOTARY_KEY_ID" --issuer "$NOTARY_ISSUER_ID")
+          result=$(xcrun notarytool submit "build/Nudge-$VERSION.dmg" "${auth[@]}" --wait --timeout 30m \
+            --output-format json)
+          echo "$result"
+          if [[ $(jq -r .status <<<"$result") != Accepted ]]; then
+            xcrun notarytool log "$(jq -r .id <<<"$result")" "${auth[@]}"
+            exit 1
+          fi
+          rm "$RUNNER_TEMP/notary.p8"
+          xcrun stapler staple "build/Nudge-$VERSION.dmg"
+          spctl --assess --type open --context context:primary-signature -v "build/Nudge-$VERSION.dmg"
+
+      # Draft first so the "latest" appcast URL never points at a release without its appcast.
+      - name: Draft release
+        run: |
+          gh release create "$TAG" "build/Nudge-$VERSION.dmg" --draft --target "$GITHUB_SHA" \
+            --title "Nudge $VERSION" --generate-notes
+
+      - name: Appcast
+        run: |
+          mkdir build/appcast
+          cp "build/Nudge-$VERSION.dmg" build/appcast/
+          gh release view "$TAG" --json body -q .body \
+            | gh api markdown -F text=@- -f mode=gfm -f context="$GITHUB_REPOSITORY" > "build/appcast/Nudge-$VERSION.html"
+          echo "$SPARKLE_ED_PRIVATE_KEY" > "$RUNNER_TEMP/sparkle.key"
+          "$RUNNER_TEMP/sparkle/bin/generate_appcast" --ed-key-file "$RUNNER_TEMP/sparkle.key" \
+            --download-url-prefix "https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG/" \
+            --embed-release-notes -o build/appcast/appcast.xml build/appcast
+          rm "$RUNNER_TEMP/sparkle.key"
+          gh release upload "$TAG" build/appcast/appcast.xml
+
+      - name: Publish
+        run: gh release edit "$TAG" --draft=false --latest
+
+      - name: Clean up keychain
+        if: always()
+        run: security delete-keychain "$RUNNER_TEMP/signing.keychain-db" 2> /dev/null || true
