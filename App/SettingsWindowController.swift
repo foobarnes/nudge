@@ -18,6 +18,10 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
         window.title = "Nudge Settings"
         window.titlebarAppearsTransparent = true
         window.titleVisibility = .hidden
+        // An empty unified toolbar gives the titlebar its taller height, which insets the traffic lights from the
+        // rounded corner into the sidebar's top band instead of straddling its edge.
+        window.toolbar = NSToolbar()
+        window.toolbarStyle = .unified
         window.isMovableByWindowBackground = true
         window.isOpaque = false
         window.backgroundColor = .clear
@@ -43,6 +47,7 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
         NSApp.setActivationPolicy(.regular)
         if !window.isVisible { window.center() }
         window.makeKeyAndOrderFront(nil)
+        window.makeFirstResponder(nil)   // no focus ring on the first sidebar row until the user presses Tab
         window.orderFrontRegardless()   // visible even if the system declines the activation request
         NSApp.activate()
         window.invalidateShadow()

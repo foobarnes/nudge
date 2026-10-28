@@ -16,7 +16,12 @@ final class Updater: NSObject, SPUUpdaterDelegate {
 
     var isEnabled: Bool { controller != nil }
 
-    func checkForUpdates() { controller?.checkForUpdates(nil) }
+    /// Activates first: Nudge is a menu bar app, so Sparkle's modal alert would otherwise open behind other apps'
+    /// windows and swallow every click in Nudge until it's found.
+    func checkForUpdates() {
+        NSApp.activate()
+        controller?.checkForUpdates(nil)
+    }
 
     /// A menu bar app rarely quits, so an update downloaded in the background would wait forever for "install on
     /// quit". Install and relaunch right away instead; it takes about a second.
