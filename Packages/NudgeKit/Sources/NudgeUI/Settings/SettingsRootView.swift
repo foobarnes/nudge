@@ -49,7 +49,9 @@ public struct SettingsRootView: View {
                 .padding(.top, 18).padding(.trailing, 18).padding(.bottom, 18)
         }
         .padding(12)
-        .frame(minWidth: 960, minHeight: 620)
+        // A fixed ideal size (fits the Actions editor) so the window, which follows this view's ideal size, stays put
+        // across tabs instead of resizing mid-animation when a tab's content is larger.
+        .frame(minWidth: 960, idealWidth: 1120, minHeight: 620, idealHeight: 760)
         .background {
             ZStack {
                 Rectangle().fill(.ultraThinMaterial)
