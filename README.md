@@ -19,7 +19,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/foobarnes/nudge/releases/latest"><img alt="Download for macOS" src="https://img.shields.io/badge/Download_for_macOS-7457FF?style=for-the-badge&logo=apple&logoColor=white"></a>
+  <a href="https://github.com/foobarnes/nudge/releases/latest/download/Nudge.dmg"><img alt="Download for macOS" src="https://img.shields.io/badge/Download_for_macOS-7457FF?style=for-the-badge&logo=apple&logoColor=white"></a>
 </p>
 
 <p align="center">
@@ -43,7 +43,7 @@
 
 ## Install
 
-1. Download **[the latest DMG](https://github.com/foobarnes/nudge/releases/latest)**.
+1. Download **[Nudge.dmg](https://github.com/foobarnes/nudge/releases/latest/download/Nudge.dmg)**, the latest release. Older versions are on the [Releases](https://github.com/foobarnes/nudge/releases) page.
 2. Drag **nudge** to Applications.
 3. Sign in to the [GitHub CLI](https://cli.github.com) once with `gh auth login`. Nudge reads review requests through `gh` and never stores a token of its own.
 
