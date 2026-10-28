@@ -112,10 +112,7 @@ jobs:
 
       - name: Package DMG
         run: |
-          mkdir build/dmg
-          cp -R build/export/Nudge.app build/dmg/
-          ln -s /Applications build/dmg/Applications
-          hdiutil create -volname Nudge -srcfolder build/dmg -fs HFS+ -format UDZO -ov "build/Nudge-$VERSION.dmg"
+          scripts/make-dmg.sh build/export/Nudge.app "build/Nudge-$VERSION.dmg"
           codesign --sign "Developer ID Application" --timestamp "build/Nudge-$VERSION.dmg"
 
       - name: Notarize
