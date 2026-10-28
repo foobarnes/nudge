@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+<defs>
+<linearGradient id="bg" gradientUnits="userSpaceOnUse" x1="0" y1="100" x2="0" y2="924"><stop offset="0" stop-color="#7457ff"/><stop offset="1" stop-color="#2a1a8a"/></linearGradient>
+<radialGradient id="sheen" cx="0.25" cy="0.08" r="0.8"><stop offset="0" stop-color="#ffffff" stop-opacity="0.3"/><stop offset="1" stop-color="#ffffff" stop-opacity="0"/></radialGradient>
+</defs>
+<rect x="100" y="100" width="824" height="824" rx="185" fill="url(#bg)"/>
+<rect x="100" y="100" width="824" height="824" rx="185" fill="url(#sheen)"/>
+<path fill="none" d="M372 300V724" stroke="#ffffff" stroke-width="52" stroke-linecap="round"/>
+<path fill="none" d="M652 520L652 600C652 668.5 596.5 724 528 724L430 724" stroke="#ffffff" stroke-width="52" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="372" cy="300" r="58" fill="url(#bg)" stroke="#ffffff" stroke-width="44"/>
+<circle cx="372" cy="724" r="58" fill="url(#bg)" stroke="#ffffff" stroke-width="44"/>
+<circle cx="652" cy="372" r="150" fill="#ffffff"/>
+<path fill="none" d="M652 372L591.4 337" stroke="#2a1a8a" stroke-width="30" stroke-linecap="round"/>
+<path fill="none" d="M652 372L742.9 319.5" stroke="#ff453a" stroke-width="26" stroke-linecap="round"/>
+<circle cx="652" cy="372" r="18" fill="#2a1a8a"/>
+</svg>

@@ -13,7 +13,7 @@ Releases are fully automatic. Merging a PR into `main` is the whole process.
    - signed with the Developer ID certificate;
    - hardened runtime on;
    - Sparkle public key baked into `Info.plist`.
-3. **Package.** A DMG is built, signed, notarized with `notarytool`, and stapled.
+3. **Package.** `scripts/make-dmg.sh` builds the branded DMG with `dmgbuild` (layout and assets in `scripts/dmg/`; `make dmg` builds the same DMG locally, unsigned). The DMG is then signed, notarized with `notarytool`, and stapled.
 4. **Notes.** A draft GitHub Release is created with notes generated from the merged PRs. The notes are grouped by the label `pr-title.yml` set: Breaking changes, New, Fixes, Maintenance.
 5. **Appcast.** `generate_appcast` signs the DMG with the Sparkle EdDSA key and writes `appcast.xml`, with the release notes embedded. The appcast is uploaded to the release, and then the release is published.
 6. **Update.** Running copies of Nudge check `releases/latest/download/appcast.xml` hourly. They download the update in the background, install it and relaunch, which takes about a second. Permissions survive updates because the signing identity never changes.
