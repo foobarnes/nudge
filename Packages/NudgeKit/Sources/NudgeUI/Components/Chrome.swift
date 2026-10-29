@@ -153,6 +153,17 @@ struct SyncedDot: View {
     }
 }
 
+/// "Synced 12s ago", re-rendered every second so the age keeps counting between syncs.
+struct SyncedLabel: View {
+    let status: SyncStatus
+
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 1)) { context in
+            Text(status.syncedLabel(at: context.date))
+        }
+    }
+}
+
 struct MoonChip: View {
     var body: some View {
         Chip(symbol: "moon.fill", text: "off hours")
@@ -280,11 +291,11 @@ extension SyncStatus {
         if case let .stale(_, problem) = self { problem } else { nil }
     }
 
-    var syncedLabel: String {
+    func syncedLabel(at now: Date = .now) -> String {
         switch self {
         case .starting: "Syncing…"
-        case let .ok(lastSync): "Synced \(Format.ago(lastSync))"
-        case let .stale(lastSync, _): lastSync.map { "Stale · synced \(Format.ago($0))" } ?? "Not synced yet"
+        case let .ok(lastSync): "Synced \(Format.ago(lastSync, now: now))"
+        case let .stale(lastSync, _): lastSync.map { "Stale · synced \(Format.ago($0, now: now))" } ?? "Not synced yet"
         }
     }
 }

@@ -213,7 +213,9 @@ public struct PillView: View {
     /// Offline note under (or over) the capsule; the open card shows the same status in its footer.
     @ViewBuilder private var staleChip: some View {
         if case let .stale(lastSync?, problem) = state.status, problem.fix == nil, hasRows, !expanded {
-            Text("stale · synced \(Format.ago(lastSync))")
+            TimelineView(.periodic(from: .now, by: 1)) { context in
+                Text("stale · synced \(Format.ago(lastSync, now: context.date))")
+            }
                 .font(Tokens.Typo.caption)
                 .foregroundStyle(Tokens.Palette.secondary)
                 .padding(.horizontal, 9).padding(.vertical, 4)
@@ -260,7 +262,7 @@ public struct PillView: View {
                     Text("·")
                 }
                 SyncedDot(status: state.status)
-                Text(state.status.syncedLabel)
+                SyncedLabel(status: state.status)
                 if state.resultsCapped {
                     Text("· 200+ results, some may be missing").foregroundStyle(Tokens.Palette.warning)
                 }

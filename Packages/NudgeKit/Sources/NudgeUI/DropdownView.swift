@@ -83,7 +83,7 @@ public struct DropdownView: View {
                     .motion(Motion.roll, value: state.rows.count)
                 HStack(spacing: 5) {
                     SyncedDot(status: state.status)
-                    Text(state.status.syncedLabel)
+                    SyncedLabel(status: state.status)
                 }
                 .font(Tokens.Typo.caption).foregroundStyle(Tokens.Palette.secondary)
             }
