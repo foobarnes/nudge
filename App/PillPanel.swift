@@ -62,6 +62,7 @@ final class PillController: NSObject, NSWindowDelegate {
     private var entryTask: Task<Void, Never>?
     private var resizeTask: Task<Void, Never>?
     private var settleTask: Task<Void, Never>?
+    private var settleDeadline: ContinuousClock.Instant?
     private var dimTask: Task<Void, Never>?
     private var hideTask: Task<Void, Never>?
     private var glideLink: CADisplayLink?
@@ -183,6 +184,10 @@ final class PillController: NSObject, NSWindowDelegate {
             [weak self] v in
             guard let self else { return }
             if v.mode != self.visibility?.mode { self.dismissed = false }   // a mode change ends a dismissal
+            if !v.hasRows, self.visibility?.hasRows == true, self.state.pillExpanded {
+                // The open card collapses onto the all-clear: keep the window card-sized until it has.
+                self.scheduleSettle(after: PillView.collapseDuration(reduceMotion: reduceMotion))
+            }
             self.visibility = v
             self.updateVisibility()
         }
@@ -243,7 +248,10 @@ final class PillController: NSObject, NSWindowDelegate {
         case .auto:
             if v.hasRows { show() }
             // Let the all-clear animation play before leaving.
-            else if panel.isVisible { hideTask = after(1.2) { [weak self] in self?.hide() } }
+            else if panel.isVisible {
+                let delay = PillView.allClearDuration(fromCard: state.pillExpanded, reduceMotion: reduceMotion)
+                hideTask = after(delay) { [weak self] in self?.hide() }
+            }
         }
     }
 
@@ -348,7 +356,7 @@ final class PillController: NSObject, NSWindowDelegate {
         } else {
             state.pillExpanded = false
             // Shrink only once the collapse morph has landed back on the capsule.
-            settleTask = after(PillView.collapseDuration(reduceMotion: reduceMotion)) { [weak self] in self?.settle() }
+            scheduleSettle(after: PillView.collapseDuration(reduceMotion: reduceMotion))
         }
     }
 
@@ -399,8 +407,16 @@ final class PillController: NSObject, NSWindowDelegate {
         if target.width > current.width || target.height > current.height {
             panel.setFrame(current.union(target), display: false)
         }
+        scheduleSettle(after: Self.settleDelay)
+    }
+
+    /// Fits the window to the content after `delay`, unless a later fit is already pending (a collapse in flight).
+    private func scheduleSettle(after delay: Double) {
+        let deadline = ContinuousClock.now + .seconds(delay)
+        if let pending = settleDeadline, settleTask?.isCancelled == false, pending > deadline { return }
         settleTask?.cancel()
-        settleTask = after(Self.settleDelay) { [weak self] in self?.settle() }
+        settleDeadline = deadline
+        settleTask = after(delay) { [weak self] in self?.settle() }
     }
 
     private func settle() {

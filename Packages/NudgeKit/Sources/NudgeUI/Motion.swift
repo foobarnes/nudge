@@ -11,7 +11,7 @@ enum Motion {
     static let rowSlide = Animation.easeInOut(duration: 0.3)
     static let roll = Animation.spring(duration: 0.3, bounce: 0.1)
     static let crossfade = Animation.easeInOut(duration: 0.25)
-    static let shrink = Animation.easeIn(duration: 0.4)
+    static let shrink = Animation.easeIn(duration: 0.3)
 
     static func pick(_ animation: Animation, reduced: Bool) -> Animation? {
         reduced ? crossfade : animation

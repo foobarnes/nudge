@@ -27,13 +27,13 @@ public struct PillView: View {
     private let anchor: Alignment
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.pillMotionScale) private var motionScale
-    @State private var zero: ZeroPhase = .idle
+    /// The all-clear has played out: the pill has left, or (widget always) settled on the check.
+    @State private var settled = false
+    @State private var sparkle = 0
     @State private var cards = HoverCardCoordinator()
     @State private var collapsedSize = CGSize.zero
     @State private var expandedSize = CGSize.zero
     @State private var chipHeight: CGFloat = 0
-
-    private enum ZeroPhase { case idle, sparkle, settled }
 
     /// `anchor` is the screen corner the pill is pinned to; the shape grows away from it in both axes.
     public init(state: NudgeState, intents: NudgeIntents, anchor: Alignment = .topTrailing) {
@@ -45,11 +45,16 @@ public struct PillView: View {
     /// Seconds from `pillExpanded = false` until the collapse morph has finished (the shell shrinks its window then).
     public static func collapseDuration(reduceMotion: Bool) -> Double { MorphTiming.collapseDuration(reduced: reduceMotion) }
 
+    /// Seconds from the last request leaving until the all-clear has played out (the shell hides the pill then).
+    public static func allClearDuration(fromCard: Bool, reduceMotion: Bool) -> Double {
+        AllClearTiming(fromCard: fromCard, reduced: reduceMotion).total
+    }
+
     private var oldestTier: Tier? { state.oldest?.tier }
     private var hasRows: Bool { !state.rows.isEmpty }
     private var expanded: Bool { state.pillExpanded && hasRows }
     private var anchoredAtBottom: Bool { anchor.vertical == .bottom }
-    private var hiddenAtZero: Bool { zero == .settled && state.settings.displayMode != .widgetAlways }
+    private var hiddenAtZero: Bool { settled && state.settings.displayMode != .widgetAlways }
 
     public var body: some View {
         // The outer frame never animates: it is always the larger (card) size, with the morphing shape pinned to
@@ -62,17 +67,19 @@ public struct PillView: View {
         .frame(width: outerSize.width, height: outerSize.height, alignment: anchor)
         .preference(key: PillSizesKey.self, value: sizes)
         .modifier(BounceOnce(trigger: reduceMotion ? 0 : state.newRequestPulse))
-        .scaleEffect(hiddenAtZero ? 0.2 : 1, anchor: anchor.unitPoint)
+        .scaleEffect(hiddenAtZero && !reduceMotion ? 0.85 : 1, anchor: anchor.unitPoint)
         .opacity(hiddenAtZero ? 0 : state.pillDimmed ? 0.75 : 1)
         .motion(Motion.dim, value: state.pillDimmed)
-        .motion(Motion.shrink, value: zero)
-        .onChange(of: hasRows, initial: true) { _, has in has ? reset() : celebrate() }
+        .motion(Motion.shrink, value: settled)
+        .task(id: hasRows) { if hasRows { settled = false } else { await celebrate() } }
         .environment(\.hoverCards, cards)
     }
 
+    /// The card's largest size, so a shape still collapsing from a card whose rows just left never overflows it.
     private var outerSize: CGSize {
         let s = sizes
-        return CGSize(width: max(s.collapsed.width, s.expanded.width), height: max(s.collapsed.height, s.expanded.height))
+        return CGSize(width: max(s.collapsed.width, Tokens.Size.panelWidth),
+                      height: max(s.collapsed.height, Tokens.Size.panelMaxHeight))
     }
 
     private var sizes: PillSizes {
@@ -106,18 +113,18 @@ public struct PillView: View {
                 }
                 .glassEffect(.regular, in: shape)
                 .animation(timing.shape(expanded), value: expanded)
+                .animation(timing.resize, value: collapsedSize)
                 .motion(Motion.tint, value: oldestTier)
 
             // Both contents, laid out at their final size at the anchor corner, revealed through the same shape.
+            // The card stays mounted with no rows, so reviewing the last one fades it out like any other collapse.
             ZStack(alignment: anchor) {
-                if hasRows {
-                    expandedList
-                        .opacity(expanded ? 1 : 0)
-                        .animation(timing.card(expanded), value: expanded)
-                        .allowsHitTesting(expanded)
-                        .accessibilityHidden(!expanded)
-                        .onGeometryChange(for: CGSize.self) { $0.size } action: { expandedSize = $0 }
-                }
+                expandedList
+                    .opacity(expanded ? 1 : 0)
+                    .animation(timing.card(expanded), value: expanded)
+                    .allowsHitTesting(expanded)
+                    .accessibilityHidden(!expanded)
+                    .onGeometryChange(for: CGSize.self) { $0.size } action: { expandedSize = $0 }
                 collapsed
                     .opacity(expanded ? 0 : 1)
                     .scaleEffect(expanded && !reduceMotion ? 0.96 : 1, anchor: anchor.unitPoint)
@@ -129,29 +136,40 @@ public struct PillView: View {
             .mask(alignment: anchor) {
                 shape.frame(width: size.width, height: size.height)
                     .animation(timing.shape(expanded), value: expanded)
+                    .animation(timing.resize, value: collapsedSize)
             }
         }
     }
 
     // MARK: Collapsed
 
-    @ViewBuilder private var collapsed: some View {
-        Group {
-            if let oldest = state.oldest {
-                countCapsule(oldest)
-            } else if let problem = state.status.problem, problem.fix != nil || state.status.lastSync == nil {
-                problemCapsule(problem)
-            } else if case .starting = state.status {
-                capsule { Image(systemName: "clock.badge").font(.system(size: 14, weight: .semibold)); Text("Syncing…").font(Tokens.Typo.pillLabel) }
-                    .foregroundStyle(Tokens.Palette.secondary)
-            } else if zero == .sparkle || state.settings.displayMode != .widgetAlways {
-                allClear
-            } else {
-                checkCapsule
+    /// A ZStack, not a Group: the morph's opacity must land on one persistent view, not on whichever capsule is current.
+    private var collapsed: some View {
+        ZStack(alignment: anchor) {
+            Group {
+                if let oldest = state.oldest {
+                    countCapsule(oldest)
+                } else if let problem = state.status.problem, problem.fix != nil || state.status.lastSync == nil {
+                    problemCapsule(problem)
+                } else if case .starting = state.status {
+                    capsule { Image(systemName: "clock.badge").font(.system(size: 14, weight: .semibold)); Text("Syncing…").font(Tokens.Typo.pillLabel) }
+                        .foregroundStyle(Tokens.Palette.secondary)
+                } else if !settled || state.settings.displayMode != .widgetAlways {
+                    allClear
+                } else {
+                    checkCapsule
+                }
             }
+            .transition(Self.capsuleSwap)
         }
         .foregroundStyle(Tokens.Palette.text)
     }
+
+    /// One capsule hands over to the next (a count to "All clear", "All clear" to the check): the old one clears out
+    /// before the new one fades in, so their labels never overlap.
+    private static let capsuleSwap = AnyTransition.asymmetric(
+        insertion: .opacity.animation(.easeOut(duration: 0.2).delay(0.12)),
+        removal: .opacity.animation(.easeIn(duration: 0.12)))
 
     private func countCapsule(_ oldest: PRRow) -> some View {
         let stale = state.status.problem != nil
@@ -189,7 +207,7 @@ public struct PillView: View {
             Image(systemName: "sparkles")
                 .font(.system(size: 17, weight: .bold))
                 .foregroundStyle(Tokens.Palette.accentGlyph)
-                .symbolEffect(.bounce, options: reduceMotion ? .nonRepeating.speed(0) : .nonRepeating, value: zero)
+                .symbolEffect(.bounce, options: reduceMotion ? .nonRepeating.speed(0) : .nonRepeating, value: sparkle)
             Text("All clear").font(Tokens.Typo.pillCount)
         }
         .accessibilityLabel("All clear")
@@ -309,15 +327,32 @@ public struct PillView: View {
         return label
     }
 
-    private func reset() { zero = .idle }
+    /// The last request left: the card (if open) collapses onto "All clear", the sparkles bounce once it has landed,
+    /// it holds, then the pill leaves (or settles on the check). Cancelled by a request arriving.
+    private func celebrate() async {
+        // Stale data isn't worth celebrating: go straight to the quiet state.
+        guard state.status.problem == nil else { settled = true; return }
+        let beat = AllClearTiming(fromCard: state.pillExpanded, reduced: reduceMotion, scale: motionScale)
+        try? await Task.sleep(for: .seconds(beat.lead))
+        guard !Task.isCancelled else { return }
+        sparkle += 1
+        try? await Task.sleep(for: .seconds(beat.hold))
+        guard !Task.isCancelled else { return }
+        settled = true
+    }
+}
 
-    private func celebrate() {
-        guard state.status.problem == nil else { return }
-        zero = .sparkle
-        Task {
-            try? await Task.sleep(for: .milliseconds(800))
-            if zero == .sparkle { zero = .settled }
-        }
+/// The all-clear's beats: the collapse onto the capsule (when the card was open), the hold on "All clear", and the
+/// exit (`Motion.shrink`). The shell hides the window once `total` has passed.
+struct AllClearTiming {
+    let lead: Double
+    let hold: Double
+    let total: Double
+
+    init(fromCard: Bool, reduced: Bool, scale: Double = 1) {
+        lead = (fromCard ? MorphTiming.collapseDuration(reduced: reduced) : 0.3) * scale
+        hold = 1.2 * scale
+        total = lead + hold + 0.35 * scale
     }
 }
 
@@ -339,6 +374,9 @@ struct MorphTiming {
         if reduced { return crossfade }
         return scaled(expanding ? Self.spring : Self.spring.delay(Self.collapseLead))
     }
+
+    /// The capsule changing width under the pill (a count growing, "All clear" replacing it), mid-morph or not.
+    var resize: Animation { reduced ? crossfade : scaled(Self.spring) }
 
     func capsuleContent(_ expanding: Bool) -> Animation {
         if reduced { return crossfade }

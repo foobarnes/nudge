@@ -6,7 +6,8 @@ import SwiftUI
 // Dev harness: `swift run NudgeGallery [-scene <name>] [-dark] [-shot] [-fast] [-slow] [-notKey]`.
 // Prints "WINDOW <number>" once shown, for `screencapture -l <number>`. Menus and popovers are opened by hand.
 // `-slow` runs the pill morph at 1/8 speed (frame inspection); `-notKey` hands key status to a helper window so
-// glass can be compared key vs. not key. The morph* scenes toggle the pill every 2.5s in each anchor corner.
+// glass can be compared key vs. not key. The morph* scenes toggle the pill every 2.5s in each anchor corner; the
+// clear* scenes review the last request (capsule, or open card) and replay the all-clear every 5s.
 
 @main
 struct GalleryApp: App {
@@ -31,10 +32,12 @@ enum Scene: String, CaseIterable, Identifiable {
     case settingsGeneral, settingsNotifications, settingsActions, settingsAbout
     case settingsAboutChecking, settingsAboutUpToDate, settingsAboutAvailable, settingsAboutFailed
     case morphTopTrailing, morphTopLeading, morphBottomTrailing, morphBottomLeading
+    case clearCollapsed, clearExpanded, clearCheck
 
     var id: String { rawValue }
 
     var isMorph: Bool { rawValue.hasPrefix("morph") }
+    var isClear: Bool { rawValue.hasPrefix("clear") }
     var isSettings: Bool { rawValue.hasPrefix("settings") }
 
     var anchor: Alignment {
@@ -54,7 +57,8 @@ enum Scene: String, CaseIterable, Identifiable {
     var size: CGSize {
         switch self {
         case .pillExpanded, .pillExpandedBottom, .pillExpandedSnoozed, .pillExpandedNotice,
-             .morphTopTrailing, .morphTopLeading, .morphBottomTrailing, .morphBottomLeading: CGSize(width: 520, height: 540)
+             .morphTopTrailing, .morphTopLeading, .morphBottomTrailing, .morphBottomLeading,
+             .clearCollapsed, .clearExpanded, .clearCheck: CGSize(width: 520, height: 540)
         case .dropdown, .dropdownSnoozed, .dropdownEmpty, .dropdownAuthError, .dropdownNotice: CGSize(width: 460, height: 660)
         case .rowRest, .rowHovered, .rowHoveredRed, .rowHoveredAmber, .rowHoveredTeam: CGSize(width: 500, height: 200)
         case .hoverCards: CGSize(width: 460, height: 440)
@@ -94,6 +98,7 @@ struct GalleryView: View {
         .environment(\.pillMotionScale, ProcessInfo.processInfo.arguments.contains("-slow") ? 8 : 1)
         .onChange(of: scene, initial: true) { _, scene in state = Self.state(for: scene) }
         .task(id: scene) {
+            if scene.isClear { return await replayAllClear() }
             guard scene.isMorph else { return }
             let slow = ProcessInfo.processInfo.arguments.contains("-slow")
             while !Task.isCancelled {
@@ -105,13 +110,30 @@ struct GalleryView: View {
         }
     }
 
+    /// One request left; it's reviewed (printing "CLEAR", the capture's time zero), then comes back for the next round.
+    private func replayAllClear() async {
+        let slow = ProcessInfo.processInfo.arguments.contains("-slow")
+        let last = Self.state(for: scene).rows.prefix(1)
+        while !Task.isCancelled {
+            state.rows = Array(last)
+            state.pillExpanded = scene == .clearExpanded
+            try? await Task.sleep(for: .milliseconds(slow ? 4000 : 1500))
+            state.rows = []
+            print("CLEAR")
+            fflush(stdout)
+            try? await Task.sleep(for: .milliseconds(slow ? 20_000 : 3500))
+            state.pillExpanded = false
+        }
+    }
+
     @ViewBuilder private var content: some View {
         switch scene {
         case .pillMixed, .pillFresh, .pillAmber, .pillRed, .pillTeam, .pillOffHours, .pillStale, .pillAuthError,
              .pillAllClear, .pillCheck, .pillDimmed, .pillLoading, .pillExpanded, .pillExpandedBottom,
              .pillExpandedSnoozed, .pillExpandedNotice:
             pill
-        case .morphTopTrailing, .morphTopLeading, .morphBottomTrailing, .morphBottomLeading:
+        case .morphTopTrailing, .morphTopLeading, .morphBottomTrailing, .morphBottomLeading,
+             .clearCollapsed, .clearExpanded, .clearCheck:
             pill
         case .dropdown, .dropdownSnoozed, .dropdownEmpty, .dropdownAuthError, .dropdownNotice:
             DropdownView(state: state, intents: intents).padding(8)
@@ -196,6 +218,9 @@ struct GalleryView: View {
         case .pillStale: s = .sample(.stale)
         case .pillAuthError, .dropdownAuthError: s = .sample(.authError)
         case .pillAllClear: s = .sample(.empty)
+        case .clearCheck:
+            s = .sample(.mixed)
+            s.settings.displayMode = .widgetAlways
         case .pillCheck:
             s = .sample(.empty)
             s.settings.displayMode = .widgetAlways
@@ -278,6 +303,8 @@ final class GalleryDelegate: NSObject, NSApplicationDelegate {
             try? await Task.sleep(for: .milliseconds(ProcessInfo.processInfo.arguments.contains("-fast") ? 250 : 700))
             guard let window = NSApp.windows.first(where: { $0.isVisible }) else { return }
             window.makeKeyAndOrderFront(nil)
+            // Screen recordings capture a rect, so keep other apps' windows from covering it mid-capture.
+            if ProcessInfo.processInfo.arguments.contains("-shot") { window.level = .floating }
             if ProcessInfo.processInfo.arguments.contains("-notKey") {
                 // A helper window takes key status so the gallery window renders its glass as inactive.
                 let helper = NSWindow(contentRect: NSRect(x: window.frame.minX, y: window.frame.minY - 60, width: 120, height: 40),
