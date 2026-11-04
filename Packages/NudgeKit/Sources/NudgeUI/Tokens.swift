@@ -55,18 +55,20 @@ enum Tokens {
 
         static func dot(_ tier: NudgeCore.Tier) -> Color {
             switch tier {
-            case .fresh: Color(hex: 0x8E8E93)
+            case .fresh: Palette.accentGlyph   // brand violet, not idle grey
             case .amber: dynamic(light: 0xFF9500, dark: 0xFF9F0A)
             case .red: dynamic(light: 0xFF3B30, dark: 0xFF453A)
             }
         }
 
-        /// Glass tint from concept B; clear for Fresh.
-        static func tint(_ tier: NudgeCore.Tier?) -> Color? {
+        /// Glass tint from concept B. Fresh is brand violet, so a waiting request never reads as idle grey, and
+        /// stronger while a request is new; nil with nothing waiting.
+        static func tint(_ tier: NudgeCore.Tier?, new: Bool = false) -> Color? {
             switch tier {
             case .amber: Color(red: 1, green: 170 / 255, blue: 60 / 255).opacity(0.34)
             case .red: Color(red: 1, green: 80 / 255, blue: 60 / 255).opacity(0.32)
-            case .fresh, nil: nil
+            case .fresh: Palette.accentGlyph.opacity(new ? 0.34 : 0.16)
+            case nil: nil
             }
         }
 

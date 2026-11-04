@@ -30,6 +30,10 @@ public struct PillView: View {
     /// The all-clear has played out: the pill has left, or (widget always) settled on the check.
     @State private var settled = false
     @State private var sparkle = 0
+    /// New-request cues: one jiggle, hop (jiggle off), or glow per increment.
+    @State private var jiggles = 0
+    @State private var hops = 0
+    @State private var glows = 0
     @State private var cards = HoverCardCoordinator()
     @State private var collapsedSize = CGSize.zero
     @State private var expandedSize = CGSize.zero
@@ -55,6 +59,7 @@ public struct PillView: View {
     private var expanded: Bool { state.pillExpanded && hasRows }
     private var anchoredAtBottom: Bool { anchor.vertical == .bottom }
     private var hiddenAtZero: Bool { settled && state.settings.displayMode != .widgetAlways }
+    private var isNew: Bool { state.hasNewRows }
 
     public var body: some View {
         // The outer frame never animates: it is always the larger (card) size, with the morphing shape pinned to
@@ -66,12 +71,15 @@ public struct PillView: View {
         }
         .frame(width: outerSize.width, height: outerSize.height, alignment: anchor)
         .preference(key: PillSizesKey.self, value: sizes)
-        .modifier(BounceOnce(trigger: reduceMotion ? 0 : state.newRequestPulse))
+        .modifier(BounceOnce(trigger: hops))
+        .modifier(Jiggle(trigger: jiggles))
         .scaleEffect(hiddenAtZero && !reduceMotion ? 0.85 : 1, anchor: anchor.unitPoint)
         .opacity(hiddenAtZero ? 0 : state.pillDimmed ? 0.75 : 1)
         .motion(Motion.dim, value: state.pillDimmed)
         .motion(Motion.shrink, value: settled)
         .task(id: hasRows) { if hasRows { settled = false } else { await celebrate() } }
+        .onChange(of: state.newRequestPulse) { cue(reminder: false) }
+        .onChange(of: state.reminderPulse) { cue(reminder: true) }
         .environment(\.hoverCards, cards)
     }
 
@@ -107,14 +115,16 @@ public struct PillView: View {
                     // Tint we control, so it reads the same whether the panel is key or not. Capsule only
                     // (concept B): it fades out as the shape opens into the neutral card.
                     shape.fill(Tokens.Palette.glassScrim)
-                    if let tint = Tokens.Tier.tint(oldestTier) {
+                    if let tint = Tokens.Tier.tint(oldestTier, new: isNew) {
                         shape.fill(tint).opacity(expanded ? 0 : 1)
                     }
+                    shape.fill(Tokens.Palette.accentGlyph).modifier(Glow(trigger: glows)).opacity(expanded ? 0 : 1)
                 }
                 .glassEffect(.regular, in: shape)
                 .animation(timing.shape(expanded), value: expanded)
                 .animation(timing.resize, value: collapsedSize)
                 .motion(Motion.tint, value: oldestTier)
+                .motion(Motion.tint, value: isNew)
 
             // Both contents, laid out at their final size at the anchor corner, revealed through the same shape.
             // The card stays mounted with no rows, so reviewing the last one fades it out like any other collapse.
@@ -175,11 +185,17 @@ public struct PillView: View {
         let stale = state.status.problem != nil
         return capsule {
             TierDot(tier: oldest.tier, isTeam: oldest.pr.via.isTeam, dimmed: state.isOffHours || stale)
+            // A count badge, solid violet while a request is new. Same padding either way, so nothing resizes.
             Text(verbatim: "\(state.rows.count)")
                 .font(Tokens.Typo.pillCount).monospacedDigit()
-                .shadow(color: Tokens.Palette.textShadow, radius: 1.5, y: 0.5)
+                .foregroundStyle(isNew ? Color.white : Tokens.Palette.text)
+                .shadow(color: isNew ? .clear : Tokens.Palette.textShadow, radius: 1.5, y: 0.5)
                 .contentTransition(.numericText())
                 .motion(Motion.roll, value: state.rows.count)
+                .padding(.horizontal, 7)
+                .frame(minWidth: 26, minHeight: 25)
+                .background(isNew ? Tokens.Palette.accent : Tokens.Palette.fill, in: Capsule())
+                .motion(Motion.tint, value: isNew)
             Text("·").font(Tokens.Typo.pillLabel).foregroundStyle(Tokens.Palette.secondary)
             TimerText(since: oldest.pr.waitingSince, tier: oldest.tier, font: Tokens.Typo.pillTimer, tracking: -0.42,
                       greyed: stale)
@@ -324,7 +340,21 @@ public struct PillView: View {
             label += ", oldest \(Format.spoken(Date.now.timeIntervalSince(since)))"
         }
         if state.isOffHours { label += ", outside work hours" }
+        if isNew { label += ", new request" }
         return label
+    }
+
+    /// A request arrived, or the shell's reminder fired while one goes unopened: jiggle and glow, glow alone under
+    /// Reduce Motion. With jiggle off, arrivals keep the plain hop. The open card doesn't jiggle: it's being read.
+    private func cue(reminder: Bool) {
+        guard hasRows else { return }
+        guard state.settings.jiggleOnNewRequests else {
+            if !reminder, !reduceMotion { hops += 1 }
+            return
+        }
+        guard !expanded else { return }
+        if !reduceMotion { jiggles += 1 }
+        glows += 1
     }
 
     /// The last request left: the card (if open) collapses onto "All clear", the sparkles bounce once it has landed,
@@ -455,6 +485,40 @@ struct RowList: View {
     private var rowOffset: CGFloat {
         guard let reveal, !reveal.shown, !reduceMotion else { return 0 }
         return reveal.fromBottom ? 6 : -6
+    }
+}
+
+/// One damped shake per change of `trigger`: a single linear clock drives `Motion.jiggleOffset`, so the motion is
+/// one continuous curve rather than chained keyframes.
+private struct Jiggle: ViewModifier {
+    let trigger: Int
+
+    func body(content: Content) -> some View {
+        content.keyframeAnimator(initialValue: Motion.jiggleDuration, trigger: trigger, content: { view, t in
+            view.offset(x: Motion.jiggleOffset(t))
+        }, keyframes: { _ in
+            KeyframeTrack {
+                MoveKeyframe(0)
+                LinearKeyframe(Motion.jiggleDuration, duration: Motion.jiggleDuration)
+            }
+        })
+    }
+}
+
+/// One violet wash per change of `trigger` (opacity only, so it plays under Reduce Motion too).
+private struct Glow: ViewModifier {
+    let trigger: Int
+
+    func body(content: Content) -> some View {
+        content.keyframeAnimator(initialValue: 0.0, trigger: trigger, content: { view, opacity in
+            view.opacity(opacity)
+        }, keyframes: { _ in
+            KeyframeTrack {
+                CubicKeyframe(Motion.glowPeak, duration: Motion.glowRise)
+                LinearKeyframe(Motion.glowPeak, duration: Motion.glowHold)
+                CubicKeyframe(0, duration: Motion.glowFade)
+            }
+        })
     }
 }
 

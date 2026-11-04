@@ -148,6 +148,10 @@ public struct NudgeSettings: Codable, Hashable, Sendable {
     public var launchAtLogin = false
     /// Off keeps Nudge out of the Dock and the menu bar even while Settings is open.
     public var showInDock = true
+    /// The pill wiggles when a request arrives and again while it goes unopened (a glow under Reduce Motion).
+    public var jiggleOnNewRequests = true
+    /// A soft sound on arrival (unless the banner already plays one) and with each reminder.
+    public var soundOnNewRequests = true
     public var workHours = WorkHoursConfig()
     public var thresholds = TierThresholds()
     public var terminalApp: TerminalApp = .ghostty
@@ -169,6 +173,8 @@ public struct NudgeSettings: Codable, Hashable, Sendable {
         displayMode = try value(.displayMode, d.displayMode)
         launchAtLogin = try value(.launchAtLogin, d.launchAtLogin)
         showInDock = try value(.showInDock, d.showInDock)
+        jiggleOnNewRequests = try value(.jiggleOnNewRequests, d.jiggleOnNewRequests)
+        soundOnNewRequests = try value(.soundOnNewRequests, d.soundOnNewRequests)
         workHours = try value(.workHours, d.workHours)
         thresholds = try value(.thresholds, d.thresholds)
         terminalApp = try value(.terminalApp, d.terminalApp)
@@ -257,6 +263,10 @@ public final class NudgeState {
     public var viewerLogin: String?
     /// Incremented once per new-request banner; views bounce on change.
     public var newRequestPulse = 0
+    /// Requests bannered since the user last opened the pill or dropdown. The pill reads louder while one is showing.
+    public var newRowIDs: Set<String> = []
+    /// Incremented by the shell's reminder while new requests go unopened; the pill jiggles again on change.
+    public var reminderPulse = 0
     public var resultsCapped = false           // "200+ results — some may be missing"
     /// Non-fatal sync notice shown in the footer while rows still display, e.g. SAML SSO gaps.
     public var notice: SyncProblem?
@@ -271,6 +281,12 @@ public final class NudgeState {
     public init() {}
 
     public var oldest: PRRow? { rows.first }
+    public var hasNewRows: Bool { !newRowIDs.isEmpty && rows.contains { newRowIDs.contains($0.id) } }
+
+    /// The user has looked at the requests (opened the card or the dropdown).
+    public func acknowledgeNewRows() {
+        if !newRowIDs.isEmpty { newRowIDs = [] }
+    }
 }
 
 /// What views can ask for. The shell assembles this from the controller plus AppKit-only behaviors.

@@ -15,6 +15,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var settingsWindow: SettingsWindowController!
     private var launchAtLogin: LaunchAtLogin!
     private var updater: Updater!
+    private var cue: NewRequestCue!
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
@@ -53,6 +54,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         settingsWindow = SettingsWindowController(state: state, intents: intents)
         launchAtLogin = LaunchAtLogin(state: state, engine: engine, alerts: notifications)
+        cue = NewRequestCue(state: state, notifications: notifications)
+        cue.start { [weak self] in self?.state.pillExpanded == true || self?.dropdown.isShown == true }
 
         NSWorkspace.shared.notificationCenter.addObserver(
             forName: NSWorkspace.didWakeNotification, object: nil, queue: .main) { [weak self] _ in
@@ -109,6 +112,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func showDropdown() {
         guard !dropdown.isShown, let anchor = statusItem.buttonFrame else { return }
         dropdown.show(below: anchor, on: statusItem.screen)
+        if dropdown.isShown { state.acknowledgeNewRows() }
     }
 }
 
