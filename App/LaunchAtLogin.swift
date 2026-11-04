@@ -10,6 +10,8 @@ final class LaunchAtLogin {
     private let engine: NudgeEngine
     private let alerts: NotificationService
     private let service = SMAppService.mainApp
+    private static let registeredBuildKey = "launchAtLoginRegisteredBuild"
+    private let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? ""
 
     init(state: NudgeState, engine: NudgeEngine, alerts: NotificationService) {
         self.state = state
@@ -20,6 +22,7 @@ final class LaunchAtLogin {
     private var isOn: Bool { service.status == .enabled || service.status == .requiresApproval }
 
     func start() {
+        refreshRegistration()
         reflect()
         // Skip the initial value: it may predate `reflect()` if the engine applies settings asynchronously.
         var initial = true
@@ -33,10 +36,30 @@ final class LaunchAtLogin {
         if state.settings.launchAtLogin != actual { engine.updateSettings { $0.launchAtLogin = actual } }
     }
 
+    /// Login Items binds the entry to the signature it saw at `register()`, and an older build's entry can read as
+    /// `.enabled` yet never launch the current one. Re-register once per build so it matches this bundle. Debug
+    /// builds skip it so running one never moves the login item off the installed app.
+    private func refreshRegistration() {
+        #if DEBUG
+        return
+        #endif
+        guard service.status == .enabled,
+              UserDefaults.standard.string(forKey: Self.registeredBuildKey) != build else { return }
+        do {
+            try service.unregister()
+            try service.register()
+            UserDefaults.standard.set(build, forKey: Self.registeredBuildKey)
+        } catch {
+            alerts.alert(title: "Couldn't refresh Launch at login",
+                         body: "Turn Launch at login off and on in Settings. \(error.localizedDescription)")
+        }
+    }
+
     private func apply(_ wanted: Bool) {
         guard wanted != isOn else { return }
         do {
             if wanted { try service.register() } else { try service.unregister() }
+            UserDefaults.standard.set(wanted ? build : nil, forKey: Self.registeredBuildKey)
             if service.status == .requiresApproval {
                 alerts.alert(title: "Approve Nudge in Login Items",
                              body: "System Settings › General › Login Items needs your OK before Nudge opens at login.")
