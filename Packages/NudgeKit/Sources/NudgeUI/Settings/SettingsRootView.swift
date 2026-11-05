@@ -230,22 +230,25 @@ struct SettingsSwitchStyle: ToggleStyle {
 
     func makeBody(configuration: Configuration) -> some View {
         let knob = Self.size.height - Self.inset * 2
-        Capsule()
-            .fill(configuration.isOn ? Tokens.Palette.accent : .white.opacity(0.16))
-            .overlay { Capsule().strokeBorder(.white.opacity(configuration.isOn ? 0 : 0.18), lineWidth: 0.5) }
-            .overlay(alignment: configuration.isOn ? .trailing : .leading) {
-                Circle()
-                    .fill(.white)
-                    .shadow(color: .black.opacity(0.3), radius: 1.5, y: 0.5)
-                    .frame(width: knob, height: knob)
-                    .padding(Self.inset)
-            }
-            .frame(width: Self.size.width, height: Self.size.height)
-            .contentShape(Capsule())
-            .onTapGesture { configuration.isOn.toggle() }
-            .animation(.snappy(duration: 0.18), value: configuration.isOn)
-            .accessibilityElement(children: .ignore)
-            .accessibilityRepresentation { Toggle(isOn: configuration.$isOn) { configuration.label } }
+        // A Button rather than a tap gesture, so Tab reaches it with Full Keyboard Access and Space flips it.
+        Button { configuration.isOn.toggle() } label: {
+            Capsule()
+                .fill(configuration.isOn ? Tokens.Palette.accent : .white.opacity(0.16))
+                .overlay { Capsule().strokeBorder(.white.opacity(configuration.isOn ? 0 : 0.18), lineWidth: 0.5) }
+                .overlay(alignment: configuration.isOn ? .trailing : .leading) {
+                    Circle()
+                        .fill(.white)
+                        .shadow(color: .black.opacity(0.3), radius: 1.5, y: 0.5)
+                        .frame(width: knob, height: knob)
+                        .padding(Self.inset)
+                }
+                .frame(width: Self.size.width, height: Self.size.height)
+                .contentShape(Capsule())
+                .animation(.snappy(duration: 0.18), value: configuration.isOn)
+        }
+        .buttonStyle(.plain)
+        .accessibilityElement(children: .ignore)
+        .accessibilityRepresentation { Toggle(isOn: configuration.$isOn) { configuration.label } }
     }
 }
 
