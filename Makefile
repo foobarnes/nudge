@@ -3,10 +3,10 @@ SHELL := /bin/bash
 
 PACKAGE_DIR := Packages/NudgeKit
 APP_NAME    := Nudge
-# The built bundle and process name (PRODUCT_NAME in project.yml); APP_NAME is the Xcode project and scheme.
-PRODUCT     := Nudge PRs
+# The process name (EXECUTABLE_NAME in project.yml); the bundle is still $(APP_NAME).app.
+PROCESS     := Nudge PRs
 DERIVED     := $(PWD)/DerivedData
-INSTALLED   := /Applications/$(PRODUCT).app
+INSTALLED   := /Applications/$(APP_NAME).app
 ARGS        ?=
 
 .PHONY: help bootstrap gen build test run run-debug dmg clean
@@ -29,17 +29,17 @@ test: ## Run the package test suite
 
 run: gen ## Build Release, install to /Applications, relaunch
 	xcodebuild -project $(APP_NAME).xcodeproj -scheme $(APP_NAME) -configuration Release -derivedDataPath $(DERIVED) -quiet build
-	-pkill -x "$(PRODUCT)"
-	rm -rf "$(INSTALLED)" && cp -R "$(DERIVED)/Build/Products/Release/$(PRODUCT).app" "$(INSTALLED)"
+	-pkill -x "$(PROCESS)"
+	rm -rf "$(INSTALLED)" && cp -R "$(DERIVED)/Build/Products/Release/$(APP_NAME).app" "$(INSTALLED)"
 	open "$(INSTALLED)"
 
 run-debug: build ## Build Debug and launch it with ARGS (e.g. ARGS="-NudgeFixture path.json")
-	-pkill -x "$(PRODUCT)"
-	"$(DERIVED)/Build/Products/Debug/$(PRODUCT).app/Contents/MacOS/$(PRODUCT)" $(ARGS) &
+	-pkill -x "$(PROCESS)"
+	"$(DERIVED)/Build/Products/Debug/$(APP_NAME).app/Contents/MacOS/$(PROCESS)" $(ARGS) &
 
 dmg: gen ## Build Release into build/ and package an unsigned build/Nudge.dmg (doesn't install or relaunch)
 	xcodebuild -project $(APP_NAME).xcodeproj -scheme $(APP_NAME) -configuration Release -derivedDataPath $(PWD)/build/DerivedData -quiet build
-	scripts/make-dmg.sh "$(PWD)/build/DerivedData/Build/Products/Release/$(PRODUCT).app" $(PWD)/build/$(APP_NAME).dmg
+	scripts/make-dmg.sh "$(PWD)/build/DerivedData/Build/Products/Release/$(APP_NAME).app" $(PWD)/build/$(APP_NAME).dmg
 
 clean: ## Remove build output and the generated project
 	rm -rf $(DERIVED) $(APP_NAME).xcodeproj $(PACKAGE_DIR)/.build
