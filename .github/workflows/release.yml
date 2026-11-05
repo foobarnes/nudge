@@ -112,7 +112,7 @@ jobs:
 
       - name: Package DMG
         run: |
-          scripts/make-dmg.sh "build/export/Nudge PRs.app""build/Nudge-$VERSION.dmg"
+          scripts/make-dmg.sh "build/export/Nudge PRs.app" "build/Nudge-$VERSION.dmg"
           codesign --sign "Developer ID Application" --timestamp "build/Nudge-$VERSION.dmg"
 
       - name: Notarize
