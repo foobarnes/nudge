@@ -76,11 +76,18 @@ public struct DropdownView: View {
     // MARK: Sections
 
     private var header: some View {
-        HStack(alignment: .center) {
+        HStack(alignment: .center, spacing: 10) {
             VStack(alignment: .leading, spacing: 2) {
-                Text(title).font(Tokens.Typo.heading)
-                    .contentTransition(.numericText())
-                    .motion(Motion.roll, value: state.rows.count)
+                HStack(spacing: 6) {
+                    if isAllClear {
+                        Image(systemName: "sparkles").foregroundStyle(Tokens.Palette.accentGlyph)
+                            .transition(.scale.combined(with: .opacity))
+                    }
+                    Text(title)
+                        .contentTransition(.numericText())
+                        .motion(Motion.roll, value: state.rows.count)
+                }
+                .font(Tokens.Typo.heading)
                 HStack(spacing: 5) {
                     SyncedDot(status: state.status)
                     SyncedLabel(status: state.status)
@@ -88,22 +95,25 @@ public struct DropdownView: View {
                 .font(Tokens.Typo.caption).foregroundStyle(Tokens.Palette.secondary)
             }
             Spacer()
-            Button { intents.syncNow() } label: { Label("Sync", systemImage: "arrow.clockwise") }
-                .buttonStyle(MiniButtonStyle())
-                .labelStyle(MiniLabelStyle())
-                .accessibilityLabel("Sync now")
+            IconButton(symbol: "arrow.clockwise", label: "Sync now") { intents.syncNow() }
+                .help("Sync now")
         }
-        .padding(.horizontal, 10).padding(.top, 6).padding(.bottom, 8)
+        .padding(.leading, 10).padding(.trailing, 4).padding(.top, 4).padding(.bottom, 6)
         .contentShape(Rectangle())
         .contextMenu { PillContextMenu(state: state, intents: intents, includesOpenDropdown: false) }
     }
 
     private var title: String {
         switch state.rows.count {
-        case 0: state.status == .starting ? "Syncing…" : "Nothing waiting on you"
+        case 0: state.status == .starting ? "Syncing…" : isAllClear ? "All clear" : "Nothing waiting on you"
         case 1: "1 waiting on you"
         case let n: "\(n) waiting on you"
         }
+    }
+
+    /// Empty and healthy: the header says so itself, so there's no separate empty row.
+    private var isAllClear: Bool {
+        if case .ok = state.status { state.rows.isEmpty } else { false }
     }
 
     @ViewBuilder private var emptyState: some View {
@@ -118,13 +128,6 @@ public struct DropdownView: View {
             }
             .padding(.horizontal, 12).padding(.vertical, 10)
             .background(Tokens.Palette.fill, in: RoundedRectangle(cornerRadius: Tokens.Radius.row, style: .continuous))
-        } else if state.status != .starting {
-            HStack(spacing: 8) {
-                Image(systemName: "sparkles").foregroundStyle(Tokens.Palette.accentGlyph)
-                Text("All clear").font(Tokens.Typo.rowTitle)
-                Spacer()
-            }
-            .padding(.horizontal, 12).padding(.vertical, 10)
         }
     }
 
@@ -158,34 +161,34 @@ public struct DropdownView: View {
     }
 
     private var displayModeSection: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("Show timers").font(Tokens.Typo.caption).foregroundStyle(Tokens.Palette.secondary).padding(.horizontal, 4)
-            Segmented(segments: [
-                .init(option: DisplayMode.menuBarOnly, title: "Menu bar"),
-                .init(option: .widgetAlways, title: "Widget"),
-                .init(option: .auto, title: "Auto"),
-            ], selection: displayMode)
-            .accessibilityLabel("Show timers")
-            Text(state.settings.displayMode.hint)
-                .font(Tokens.Typo.caption.weight(.medium)).foregroundStyle(Tokens.Palette.secondary)
-                .padding(.horizontal, 4)
-                .contentTransition(.opacity)
+        VStack(spacing: 0) {
+            MenuDivider()
+            HStack(spacing: 8) {
+                MenuIcon(symbol: "timer")
+                Text("Show timers").font(Tokens.Typo.menuItem.weight(.semibold))
+                Spacer(minLength: 12)
+                Segmented(segments: [
+                    .init(option: DisplayMode.menuBarOnly, title: "Menu bar"),
+                    .init(option: .widgetAlways, title: "Widget"),
+                    .init(option: .auto, title: "Auto"),
+                ], selection: displayMode, height: 22)
+                .frame(width: 252)
+                .accessibilityLabel("Show timers")
+                .accessibilityHint(state.settings.displayMode.hint)
+            }
+            .padding(.leading, 11).padding(.trailing, 6).padding(.vertical, 5)
+            .help(state.settings.displayMode.hint)
         }
-        .padding(.horizontal, 6).padding(.top, 10).padding(.bottom, 4)
-        .overlay(alignment: .top) { Divider().overlay(Tokens.Palette.hairline) }
-        .padding(.top, 4)
     }
 
     private var menuItems: some View {
         VStack(spacing: 0) {
-            MenuRow(title: "Settings…", shortcut: "⌘,") { intents.openSettings() }
+            MenuDivider()
+            MenuRow(symbol: "gearshape", title: "Settings…", shortcut: "⌘,") { intents.openSettings() }
                 .keyboardShortcut(",", modifiers: .command)
-            MenuRow(title: "Quit Nudge", shortcut: "⌘Q") { intents.quit() }
+            MenuRow(symbol: "power", title: "Quit Nudge", shortcut: "⌘Q") { intents.quit() }
                 .keyboardShortcut("q", modifiers: .command)
         }
-        .padding(.top, 4)
-        .overlay(alignment: .top) { Divider().overlay(Tokens.Palette.hairline) }
-        .padding(.top, 4)
     }
 }
 
@@ -229,20 +232,42 @@ private struct SnoozedRowView: View {
 }
 
 private struct MenuRow: View {
+    let symbol: String
     let title: String
     let shortcut: String
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
-            HStack {
+            HStack(spacing: 8) {
+                MenuIcon(symbol: symbol)
                 Text(title)
                 Spacer()
-                Text(shortcut).font(Tokens.Typo.rowSubtitle).foregroundStyle(Tokens.Palette.secondary)
+                Text(shortcut).font(Tokens.Typo.rowSubtitle).foregroundStyle(Tokens.Palette.tertiary)
             }
         }
         .buttonStyle(MenuItemStyle())
-        .frame(height: 30)
+        .frame(height: 28)
+    }
+}
+
+/// Fixed-width glyph column so menu titles line up whatever the symbol's shape.
+private struct MenuIcon: View {
+    let symbol: String
+
+    var body: some View {
+        Image(systemName: symbol)
+            .font(.system(size: 13, weight: .medium))
+            .foregroundStyle(Tokens.Palette.secondary)
+            .frame(width: 18)
+            .accessibilityHidden(true)
+    }
+}
+
+private struct MenuDivider: View {
+    var body: some View {
+        Rectangle().fill(Tokens.Palette.hairline).frame(height: 1)
+            .padding(.horizontal, 10).padding(.vertical, 4)
     }
 }
 
