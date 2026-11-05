@@ -46,6 +46,18 @@ struct GeneralSettingsView: View {
                 }
 
                 SettingsCard {
+                    SettingsRow(title: "Jiggle on new requests", note: "The widget wiggles when a request arrives, then every 12 working minutes until you open it. A glow instead with Reduce Motion.") {
+                        Toggle("Jiggle on new requests", isOn: intents.setting(\.jiggleOnNewRequests, from: state))
+                            .labelsHidden().toggleStyle(.switch).controlSize(.small)
+                    }
+                    Divider().overlay(.white.opacity(0.07))
+                    SettingsRow(title: "Play sound on new requests", note: "A soft tink on arrival (unless the banner already chimes) and with each reminder.") {
+                        Toggle("Play sound on new requests", isOn: intents.setting(\.soundOnNewRequests, from: state))
+                            .labelsHidden().toggleStyle(.switch).controlSize(.small)
+                    }
+                }
+
+                SettingsCard {
                     VStack(alignment: .leading, spacing: 10) {
                         SettingsLabel("Working hours")
                         WeekdayPicker(selection: intents.setting(\.workHours.weekdays, from: state))

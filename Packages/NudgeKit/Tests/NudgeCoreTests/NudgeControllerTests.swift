@@ -58,6 +58,22 @@ import Testing
         #expect(c.state.newRequestPulse == 1)
         #expect(c.state.resultsCapped)
         #expect(c.row(withID: "RRE_a")?.pr == pr)
+        #expect(c.state.hasNewRows)
+        c.state.acknowledgeNewRows()
+        #expect(!c.state.hasNewRows)
+    }
+
+    @Test func newRowStopsBeingNewOnceItLeaves() throws {
+        let c = controller("zero-prs.json")
+        c.start()
+        c.stop()
+        let pr = makePR(requestedBy: "bo", waitingSince: now)
+        c.apply(.synced(SyncResult(snapshot: SyncSnapshot(prs: [pr], isComplete: true, fetchedAt: now),
+                                   viewer: "octocat", orgs: [], capped: false, notice: nil)))
+        #expect(c.state.newRowIDs == ["RRE_a"])
+        c.snooze(try #require(c.state.rows.first), .minutes(60))
+        #expect(c.state.newRowIDs.isEmpty)
+        #expect(!c.state.hasNewRows)
     }
 
     @Test func snoozeUnsnoozeHidePersist() throws {
@@ -100,6 +116,8 @@ import Testing
         #expect(loaded.launchAtLogin)
         #expect(loaded.repoRules == ["acme/api": .hidden])
         #expect(loaded.showInDock)
+        #expect(loaded.jiggleOnNewRequests)
+        #expect(loaded.soundOnNewRequests)
     }
 
     @Test func noticeFollowsEachSync() {

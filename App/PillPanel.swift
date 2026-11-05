@@ -196,7 +196,9 @@ final class PillController: NSObject, NSWindowDelegate {
             self.dismissed = false                                         // so does a new request
             self.updateVisibility()
         }
-        observeChanges({ [state] in Attention(tiers: state.rows.map(\.tier), pulse: state.newRequestPulse) }) {
+        observeChanges({ [state] in
+            Attention(tiers: state.rows.map(\.tier), pulse: state.newRequestPulse, reminder: state.reminderPulse)
+        }) {
             [weak self] _ in self?.wake()
         }
     }
@@ -211,6 +213,7 @@ final class PillController: NSObject, NSWindowDelegate {
     private struct Attention: Equatable, Sendable {
         var tiers: [Tier]
         var pulse: Int
+        var reminder: Int
     }
 
     /// Hides the pill until the next new request or display-mode change. Not persisted across launches.
@@ -341,6 +344,7 @@ final class PillController: NSObject, NSWindowDelegate {
         if expanded {
             dimTask?.cancel()
             state.pillDimmed = false
+            state.acknowledgeNewRows()
         } else {
             resignKey()
             scheduleDim()
@@ -380,7 +384,7 @@ final class PillController: NSObject, NSWindowDelegate {
         }
     }
 
-    /// Full opacity for 3 s on a tier change or new request.
+    /// Full opacity for 3 s on a tier change, new request, or reminder.
     private func wake() {
         state.pillDimmed = false
         scheduleDim()

@@ -175,7 +175,10 @@ final class NudgeController: NudgeEngine {
 
     private func post(_ planned: [PlannedNotification]) {
         for notification in planned {
-            if notification.kind == .newRequest { state.newRequestPulse += 1 }
+            if notification.kind == .newRequest {
+                state.newRequestPulse += 1
+                if let id = notification.rowID { state.newRowIDs.insert(id) }
+            }
             onNotify?(notification)
         }
     }
@@ -203,6 +206,8 @@ final class NudgeController: NudgeEngine {
         }
         state.rows = visible.sorted(by: Self.oldestFirst)
         state.snoozedRows = snoozed.sorted(by: Self.oldestFirst)
+        let stillNew = state.newRowIDs.intersection(visible.map(\.id))   // reviewed, snoozed, or hidden: no longer new
+        if stillNew != state.newRowIDs { state.newRowIDs = stillNew }
         state.isOffHours = !settings.workHours.weekdays.isEmpty
             && !WorkTime.isWorking(at: now, config: settings.workHours, calendar: calendar)
         state.viewerLogin = login

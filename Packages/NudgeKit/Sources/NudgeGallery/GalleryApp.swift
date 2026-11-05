@@ -7,7 +7,8 @@ import SwiftUI
 // Prints "WINDOW <number>" once shown, for `screencapture -l <number>`. Menus and popovers are opened by hand.
 // `-slow` runs the pill morph at 1/8 speed (frame inspection); `-notKey` hands key status to a helper window so
 // glass can be compared key vs. not key. The morph* scenes toggle the pill every 2.5s in each anchor corner; the
-// clear* scenes review the last request (capsule, or open card) and replay the all-clear every 5s.
+// clear* scenes review the last request (capsule, or open card) and replay the all-clear every 5s. `newRequest`
+// replays an arrival (jiggle, violet badge) and a reminder every 9s; `pillNew` holds the new-request look.
 
 @main
 struct GalleryApp: App {
@@ -33,6 +34,7 @@ enum Scene: String, CaseIterable, Identifiable {
     case settingsAboutChecking, settingsAboutUpToDate, settingsAboutAvailable, settingsAboutFailed
     case morphTopTrailing, morphTopLeading, morphBottomTrailing, morphBottomLeading
     case clearCollapsed, clearExpanded, clearCheck
+    case newRequest, pillNew
 
     var id: String { rawValue }
 
@@ -99,6 +101,7 @@ struct GalleryView: View {
         .onChange(of: scene, initial: true) { _, scene in state = Self.state(for: scene) }
         .task(id: scene) {
             if scene.isClear { return await replayAllClear() }
+            if scene == .newRequest { return await replayNewRequest() }
             guard scene.isMorph else { return }
             let slow = ProcessInfo.processInfo.arguments.contains("-slow")
             while !Task.isCancelled {
@@ -126,6 +129,29 @@ struct GalleryView: View {
         }
     }
 
+    /// Two requests wait; a third arrives (printing "NEW", the capture's time zero), a reminder follows 3s later
+    /// ("REMIND"), then it's opened and the round restarts.
+    private func replayNewRequest() async {
+        let waiting = Self.state(for: scene).rows
+        let arriving = SampleRows.teamWithOthers(now: .now)
+        while !Task.isCancelled {
+            state.rows = waiting
+            try? await Task.sleep(for: .milliseconds(1500))
+            state.rows = waiting + [arriving]
+            state.newRowIDs = [arriving.id]
+            state.newRequestPulse += 1
+            print("NEW")
+            fflush(stdout)
+            try? await Task.sleep(for: .milliseconds(3000))
+            state.reminderPulse += 1
+            print("REMIND")
+            fflush(stdout)
+            try? await Task.sleep(for: .milliseconds(3000))
+            state.acknowledgeNewRows()
+            try? await Task.sleep(for: .milliseconds(1500))
+        }
+    }
+
     @ViewBuilder private var content: some View {
         switch scene {
         case .pillMixed, .pillFresh, .pillAmber, .pillRed, .pillTeam, .pillOffHours, .pillStale, .pillAuthError,
@@ -133,7 +159,7 @@ struct GalleryView: View {
              .pillExpandedSnoozed, .pillExpandedNotice:
             pill
         case .morphTopTrailing, .morphTopLeading, .morphBottomTrailing, .morphBottomLeading,
-             .clearCollapsed, .clearExpanded, .clearCheck:
+             .clearCollapsed, .clearExpanded, .clearCheck, .newRequest, .pillNew:
             pill
         case .dropdown, .dropdownSnoozed, .dropdownEmpty, .dropdownAuthError, .dropdownNotice:
             DropdownView(state: state, intents: intents).padding(8)
@@ -211,7 +237,10 @@ struct GalleryView: View {
     @MainActor private static func state(for scene: Scene) -> NudgeState {
         let s: NudgeState
         switch scene {
-        case .pillFresh: s = .sample(.fresh)
+        case .pillFresh, .newRequest: s = .sample(.fresh)
+        case .pillNew:
+            s = .sample(.fresh)
+            s.newRowIDs = [s.rows[1].id]
         case .pillAmber: s = .sample(.amber)
         case .pillTeam: s = .sample(.teamOnly)
         case .pillOffHours: s = .sample(.offHours)
@@ -304,7 +333,13 @@ final class GalleryDelegate: NSObject, NSApplicationDelegate {
             guard let window = NSApp.windows.first(where: { $0.isVisible }) else { return }
             window.makeKeyAndOrderFront(nil)
             // Screen recordings capture a rect, so keep other apps' windows from covering it mid-capture.
-            if ProcessInfo.processInfo.arguments.contains("-shot") { window.level = .floating }
+            // Pinned to the primary display's top-left, so a `screencapture -R` rect can be computed.
+            if ProcessInfo.processInfo.arguments.contains("-shot") {
+                window.level = .floating
+                if let primary = NSScreen.screens.first?.visibleFrame {
+                    window.setFrameTopLeftPoint(NSPoint(x: primary.minX + 40, y: primary.maxY - 40))
+                }
+            }
             if ProcessInfo.processInfo.arguments.contains("-notKey") {
                 // A helper window takes key status so the gallery window renders its glass as inactive.
                 let helper = NSWindow(contentRect: NSRect(x: window.frame.minX, y: window.frame.minY - 60, width: 120, height: 40),

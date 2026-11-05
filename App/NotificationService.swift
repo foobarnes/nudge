@@ -72,6 +72,12 @@ final class NotificationService: NSObject, UNUserNotificationCenterDelegate {
         center.add(UNNotificationRequest(identifier: planned.id, content: content, trigger: nil))
     }
 
+    /// Whether request banners play their own sound (authorized, sounds allowed), so other cues can stay quiet.
+    func bannersPlaySound() async -> Bool {
+        let settings = await center.notificationSettings()
+        return settings.authorizationStatus == .authorized && settings.soundSetting == .enabled
+    }
+
     /// A shell-originated banner without actions (action failures, permissions, unreadable snooze text).
     func alert(title: String, body: String, url: URL? = nil, id: String = UUID().uuidString) {
         post(PlannedNotification(id: id, kind: .actionFailed, title: title, body: body, rowID: nil, url: url))
