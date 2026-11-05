@@ -313,14 +313,7 @@ struct SymbolPicker: View {
                     .font(.system(size: 9, weight: .bold))
                     .foregroundStyle(Tokens.Palette.settingsSecondary)
             }
-            .foregroundStyle(.white)
-            .padding(.horizontal, 12)
-            .frame(height: 36)
-            .background(Tokens.Palette.settingsField, in: RoundedRectangle(cornerRadius: Tokens.Radius.settingsField, style: .continuous))
-            .overlay {
-                RoundedRectangle(cornerRadius: Tokens.Radius.settingsField, style: .continuous)
-                    .strokeBorder(Tokens.Palette.settingsFieldEdge, lineWidth: 0.5)
-            }
+            .settingsFieldChrome()
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

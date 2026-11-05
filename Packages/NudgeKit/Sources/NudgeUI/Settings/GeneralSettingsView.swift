@@ -58,25 +58,28 @@ struct GeneralSettingsView: View {
                 }
 
                 SettingsCard {
-                    VStack(alignment: .leading, spacing: 10) {
+                    VStack(alignment: .leading, spacing: 12) {
                         SettingsLabel("Working hours")
-                        WeekdayPicker(selection: intents.setting(\.workHours.weekdays, from: state))
-                        HStack(spacing: 12) {
-                            MinutePicker(title: "Start", minute: intents.setting(\.workHours.startMinute, from: state))
-                            Text("to").foregroundStyle(Tokens.Palette.settingsSecondary)
-                            MinutePicker(title: "End", minute: intents.setting(\.workHours.endMinute, from: state))
+                        HStack(spacing: 20) {
+                            WeekdayPicker(selection: intents.setting(\.workHours.weekdays, from: state))
+                            HStack(spacing: 10) {
+                                MinutePicker(title: "Start", minute: intents.setting(\.workHours.startMinute, from: state))
+                                Text("to").font(Tokens.Typo.settingsBody).foregroundStyle(Tokens.Palette.settingsSecondary)
+                                MinutePicker(title: "End", minute: intents.setting(\.workHours.endMinute, from: state))
+                            }
                             Spacer()
                         }
                         ValidationNote(text: hoursProblem)
                         Text("Work time only counts inside these hours. Tier colors and reminders pause outside them.")
                             .font(Tokens.Typo.rowSubtitle).foregroundStyle(Tokens.Palette.settingsSecondary)
                     }
+                    .padding(.vertical, 6)
                 }
 
                 SettingsCard {
-                    VStack(alignment: .leading, spacing: 10) {
+                    VStack(alignment: .leading, spacing: 12) {
                         SettingsLabel("Escalation")
-                        HStack(spacing: 18) {
+                        HStack(spacing: 28) {
                             thresholdField("Amber after", text: $amberText, tier: .amber, commit: commitAmber)
                             thresholdField("Red after", text: $redText, tier: .red, commit: commitRed)
                             Spacer()
@@ -85,25 +88,25 @@ struct GeneralSettingsView: View {
                         Text("Working hours of waiting before a request turns amber, then red. Red sends one reminder.")
                             .font(Tokens.Typo.rowSubtitle).foregroundStyle(Tokens.Palette.settingsSecondary)
                     }
+                    .padding(.vertical, 6)
                 }
 
                 SettingsCard {
                     SettingsRow(title: "Default snooze", note: "What one click on Snooze does. The ⌄ menu always offers every option.") {
-                        Picker("Default snooze", selection: intents.setting(\.defaultSnooze, from: state)) {
-                            Text("15 minutes").tag(SnoozeOption.minutes(15))
-                            Text("1 hour").tag(SnoozeOption.minutes(60))
-                            Text("3 hours").tag(SnoozeOption.minutes(180))
-                            Text("Until tomorrow").tag(SnoozeOption.untilTomorrow)
-                            Text("Until next work day").tag(SnoozeOption.untilNextWorkDay)
-                        }
-                        .labelsHidden().frame(width: 190)
+                        SettingsMenu(title: "Default snooze", selection: intents.setting(\.defaultSnooze, from: state), options: [
+                            (SnoozeOption.minutes(15), "15 minutes"),
+                            (.minutes(60), "1 hour"),
+                            (.minutes(180), "3 hours"),
+                            (.untilTomorrow, "Until tomorrow"),
+                            (.untilNextWorkDay, "Until next work day"),
+                        ])
+                        .frame(width: Self.menuWidth)
                     }
                     Divider().overlay(.white.opacity(0.07))
                     SettingsRow(title: "Terminal app", note: "Terminal actions open here. Lists the supported terminals you have installed. Terminal.app needs Automation permission.") {
-                        Picker("Terminal app", selection: intents.setting(\.terminalApp, from: state)) {
-                            ForEach(installedTerminals, id: \.self) { Text($0.title).tag($0) }
-                        }
-                        .labelsHidden().frame(width: 190)
+                        SettingsMenu(title: "Terminal app", selection: intents.setting(\.terminalApp, from: state),
+                                     options: installedTerminals.map { ($0, $0.title) })
+                        .frame(width: Self.menuWidth)
                     }
                 }
             }
@@ -112,6 +115,9 @@ struct GeneralSettingsView: View {
         .onAppear { syncThresholdText() }
         .onChange(of: settings.thresholds) { syncThresholdText() }
     }
+
+    /// Matches the "Show timers" segmented control so every trailing control in the tab shares one width.
+    private static let menuWidth: CGFloat = 270
 
     private var hoursProblem: String? {
         if settings.workHours.weekdays.isEmpty { return "With no working days, tiers never escalate and “next work day” snoozes are off." }
@@ -132,11 +138,12 @@ struct GeneralSettingsView: View {
             Text(title).font(Tokens.Typo.settingsBody.weight(.semibold))
             TextField("hours", text: text)
                 .textFieldStyle(SettingsFieldStyle())
-                .frame(width: 64)
-                .multilineTextAlignment(.trailing)
+                .frame(width: 56)
+                .multilineTextAlignment(.center)
+                .monospacedDigit()
                 .onSubmit(commit)
                 .onChange(of: text.wrappedValue) { commit() }
-            Text("working hours").font(Tokens.Typo.rowSubtitle).foregroundStyle(Tokens.Palette.settingsSecondary)
+            Text("hours").font(Tokens.Typo.settingsBody).foregroundStyle(Tokens.Palette.settingsSecondary)
         }
     }
 
@@ -174,7 +181,7 @@ struct WeekdayPicker: View {
                     Text(symbols[day - 1])
                         .font(Tokens.Typo.settingsBody.weight(.bold))
                         .foregroundStyle(on ? .white : Tokens.Palette.settingsSecondary)
-                        .frame(width: 32, height: 32)
+                        .frame(width: Tokens.Size.settingsControl, height: Tokens.Size.settingsControl)
                         .background(on ? Tokens.Palette.accent : .black.opacity(0.28), in: Circle())
                 }
                 .buttonStyle(.plain)
@@ -185,25 +192,56 @@ struct WeekdayPicker: View {
     }
 }
 
-/// Hour/minute picker backed by minutes-after-midnight.
+/// Hour/minute field backed by minutes-after-midnight. A borderless `NSDatePicker` inside the settings field chrome:
+/// SwiftUI's `.field` style draws its own bezel, shorter and darker than every other field in the window.
 struct MinutePicker: View {
     let title: String
     @Binding var minute: Int
 
-    private var date: Binding<Date> {
-        Binding(
-            get: { Calendar.current.date(bySettingHour: minute / 60, minute: minute % 60, second: 0, of: .now) ?? .now },
-            set: { date in
-                let parts = Calendar.current.dateComponents([.hour, .minute], from: date)
-                minute = (parts.hour ?? 0) * 60 + (parts.minute ?? 0)
-            })
+    var body: some View {
+        TimeFieldRepresentable(minute: $minute)
+            .fixedSize()
+            // NSDatePicker's cell draws its text high and leaves extra room on the leading side; this optically
+            // centers it in the field (measured from gallery captures).
+            .offset(x: -3.75, y: 1.25)
+            .settingsFieldChrome()
+            .accessibilityLabel(title)
+    }
+}
+
+private struct TimeFieldRepresentable: NSViewRepresentable {
+    @Binding var minute: Int
+
+    func makeNSView(context: Context) -> NSDatePicker {
+        let picker = NSDatePicker()
+        picker.datePickerStyle = .textField
+        picker.datePickerElements = .hourMinute
+        picker.isBezeled = false
+        picker.isBordered = false
+        picker.drawsBackground = false
+        picker.textColor = .white
+        picker.font = NSFont.monospacedDigitSystemFont(ofSize: 13, weight: .medium)
+        picker.focusRingType = .none
+        picker.target = context.coordinator
+        picker.action = #selector(Coordinator.changed(_:))
+        return picker
     }
 
-    var body: some View {
-        DatePicker(title, selection: date, displayedComponents: .hourAndMinute)
-            .labelsHidden()
-            .datePickerStyle(.field)
-            .frame(width: 92)
-            .accessibilityLabel(title)
+    func updateNSView(_ picker: NSDatePicker, context: Context) {
+        context.coordinator.minute = $minute
+        let date = Calendar.current.date(bySettingHour: minute / 60, minute: minute % 60, second: 0, of: .now) ?? .now
+        if picker.dateValue != date { picker.dateValue = date }
+    }
+
+    func makeCoordinator() -> Coordinator { Coordinator(minute: $minute) }
+
+    final class Coordinator: NSObject {
+        var minute: Binding<Int>
+        init(minute: Binding<Int>) { self.minute = minute }
+
+        @objc func changed(_ picker: NSDatePicker) {
+            let parts = Calendar.current.dateComponents([.hour, .minute], from: picker.dateValue)
+            minute.wrappedValue = (parts.hour ?? 0) * 60 + (parts.minute ?? 0)
+        }
     }
 }

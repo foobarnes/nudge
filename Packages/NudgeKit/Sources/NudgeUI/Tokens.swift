@@ -135,6 +135,8 @@ enum Tokens {
         static let buttonHeight: CGFloat = 26
         static let settingsSidebarWidth: CGFloat = 206
         static let settingsTopInset: CGFloat = 38
+        /// Height of every settings field, menu and button.
+        static let settingsControl: CGFloat = 36
     }
 
     enum Space {

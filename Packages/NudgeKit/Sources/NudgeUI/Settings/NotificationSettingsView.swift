@@ -102,6 +102,8 @@ struct OrgRulesCard: View {
                 }
                 Spacer()
                 NotifyLevelPicker(level: orgLevel).accessibilityLabel(org.login)
+                // Reserve the repo rows' remove-button slot so every picker in the card shares one right edge.
+                Color.clear.frame(width: Self.removeWidth, height: 1)
             }
             .padding(10)
             if !overrides.isEmpty {
@@ -116,7 +118,7 @@ struct OrgRulesCard: View {
                             Button { intents.updateSettings { $0.repoRules[repo] = nil } } label: {
                                 Image(systemName: "xmark").font(.system(size: 9, weight: .bold))
                                     .foregroundStyle(Tokens.Palette.settingsSecondary)
-                                    .frame(width: 20, height: 20)
+                                    .frame(width: Self.removeWidth, height: 20)
                                     .contentShape(Rectangle())
                             }
                             .buttonStyle(.plain)
@@ -131,6 +133,8 @@ struct OrgRulesCard: View {
             }
         }
     }
+
+    private static let removeWidth: CGFloat = 20
 
     private var subtitle: String {
         if org.isViewer { return "Your personal repos" }

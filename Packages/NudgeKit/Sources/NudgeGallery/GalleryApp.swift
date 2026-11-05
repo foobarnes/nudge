@@ -65,7 +65,7 @@ enum Scene: String, CaseIterable, Identifiable {
         case .rowRest, .rowHovered, .rowHoveredRed, .rowHoveredAmber, .rowHoveredTeam: CGSize(width: 500, height: 200)
         case .hoverCards: CGSize(width: 460, height: 440)
         case .workTimePopover, .snoozeMenu: CGSize(width: 440, height: 360)
-        case _ where isSettings: CGSize(width: 1000, height: 720)
+        case _ where isSettings: CGSize(width: 1180, height: 820)
         default: CGSize(width: 420, height: 180)
         }
     }
