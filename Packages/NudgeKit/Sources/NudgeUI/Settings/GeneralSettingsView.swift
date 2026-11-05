@@ -36,24 +36,24 @@ struct GeneralSettingsView: View {
                     Divider().overlay(.white.opacity(0.07))
                     SettingsRow(title: "Launch at login") {
                         Toggle("Launch at login", isOn: intents.setting(\.launchAtLogin, from: state))
-                            .labelsHidden().toggleStyle(.switch).controlSize(.small)
+                            .labelsHidden().toggleStyle(SettingsSwitchStyle())
                     }
                     Divider().overlay(.white.opacity(0.07))
                     SettingsRow(title: "Show Nudge in the Dock", note: "Only while Settings is open. Off keeps Nudge in the menu bar alone.") {
                         Toggle("Show Nudge in the Dock", isOn: intents.setting(\.showInDock, from: state))
-                            .labelsHidden().toggleStyle(.switch).controlSize(.small)
+                            .labelsHidden().toggleStyle(SettingsSwitchStyle())
                     }
                 }
 
                 SettingsCard {
                     SettingsRow(title: "Jiggle on new requests", note: "The widget wiggles when a request arrives, then every 12 working minutes until you open it. A glow instead with Reduce Motion.") {
                         Toggle("Jiggle on new requests", isOn: intents.setting(\.jiggleOnNewRequests, from: state))
-                            .labelsHidden().toggleStyle(.switch).controlSize(.small)
+                            .labelsHidden().toggleStyle(SettingsSwitchStyle())
                     }
                     Divider().overlay(.white.opacity(0.07))
                     SettingsRow(title: "Play sound on new requests", note: "A soft tink on arrival (unless the banner already chimes) and with each reminder.") {
                         Toggle("Play sound on new requests", isOn: intents.setting(\.soundOnNewRequests, from: state))
-                            .labelsHidden().toggleStyle(.switch).controlSize(.small)
+                            .labelsHidden().toggleStyle(SettingsSwitchStyle())
                     }
                 }
 

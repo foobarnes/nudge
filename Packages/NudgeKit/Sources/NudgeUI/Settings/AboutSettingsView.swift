@@ -41,7 +41,7 @@ struct AboutSettingsView: View {
                                 note: "Nudge checks hourly, then installs and relaunches in about a second.") {
                         Toggle("Check for updates automatically", isOn: Binding(
                             get: { updates.checksAutomatically }, set: { intents.setChecksForUpdatesAutomatically($0) }))
-                            .labelsHidden().toggleStyle(.switch).controlSize(.small)
+                            .labelsHidden().toggleStyle(SettingsSwitchStyle())
                     }
                 }
             }
