@@ -95,7 +95,8 @@ public struct SettingsRootView: View {
                     Text(state.viewerLogin ?? "Not signed in").font(Tokens.Typo.settingsBody.weight(.semibold))
                 }
             }
-            .padding(.horizontal, 8).padding(.bottom, 4)
+            // Same 12pt inset as the nav rows, so the avatar lines up under their icons.
+            .padding(.horizontal, 12).padding(.bottom, 4)
         }
         .padding(.horizontal, 10).padding(.vertical, 14)
         .frame(width: Tokens.Size.settingsSidebarWidth)
@@ -189,14 +190,53 @@ struct SettingsFieldStyle: TextFieldStyle {
         configuration
             .textFieldStyle(.plain)
             .font(Tokens.Typo.settingsBody)
-            .foregroundStyle(.white)
+            .settingsFieldChrome()
+    }
+}
+
+extension View {
+    /// The dark inset well shared by every settings text field, menu and picker, so they line up at one height.
+    nonisolated func settingsFieldChrome() -> some View {
+        foregroundStyle(.white)
             .padding(.horizontal, 12)
-            .frame(height: 36)
+            .frame(height: Tokens.Size.settingsControl)
             .background(Tokens.Palette.settingsField, in: RoundedRectangle(cornerRadius: Tokens.Radius.settingsField, style: .continuous))
             .overlay {
                 RoundedRectangle(cornerRadius: Tokens.Radius.settingsField, style: .continuous)
                     .strokeBorder(Tokens.Palette.settingsFieldEdge, lineWidth: 0.5)
             }
+    }
+}
+
+/// A pop-up menu drawn in the settings field chrome, instead of the system pop-up button (which picks up the
+/// accent tint and its own bezel, and so never lines up with the fields around it).
+struct SettingsMenu<Value: Hashable>: View {
+    let title: String
+    @Binding var selection: Value
+    let options: [(value: Value, title: String)]
+
+    var body: some View {
+        Menu {
+            ForEach(options, id: \.value) { option in
+                Toggle(option.title, isOn: Binding(get: { selection == option.value },
+                                                   set: { if $0 { selection = option.value } }))
+            }
+        } label: {
+            HStack(spacing: 8) {
+                Text(options.first { $0.value == selection }?.title ?? "")
+                    .font(Tokens.Typo.settingsBody).lineLimit(1)
+                Spacer(minLength: 4)
+                Image(systemName: "chevron.up.chevron.down")
+                    .font(.system(size: 9, weight: .bold))
+                    .foregroundStyle(Tokens.Palette.settingsSecondary)
+            }
+            .settingsFieldChrome()
+            .contentShape(Rectangle())
+        }
+        .menuStyle(.button)
+        .buttonStyle(.plain)
+        .menuIndicator(.hidden)
+        .accessibilityLabel(title)
     }
 }
 
@@ -209,7 +249,7 @@ struct SettingsButtonStyle: ButtonStyle {
             .font(Tokens.Typo.settingsBody.weight(.bold))
             .foregroundStyle(.white)
             .padding(.horizontal, 14)
-            .frame(height: 34)
+            .frame(height: Tokens.Size.settingsControl)
             .background(fill(configuration.isPressed), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
             .onHover { hovered = $0 }
             .animation(.easeOut(duration: 0.15), value: hovered)

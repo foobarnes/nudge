@@ -166,10 +166,12 @@ private struct ActionEditor: View {
     let delete: () -> Void
     @State private var schemesText = ""
 
+    private static let sideColumn: CGFloat = 300
     private static let tokens = ["{url}", "{repo}", "{owner}", "{name}", "{number}", "{branch}", "{title}"]
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
+            // A fixed right column, so Symbol matches Name's width and both right-hand controls end flush with the editor.
             HStack(alignment: .top, spacing: 12) {
                 field("Name") { TextField("Name", text: $action.name).textFieldStyle(SettingsFieldStyle()) }
                 field("Runs as") {
@@ -178,22 +180,25 @@ private struct ActionEditor: View {
                         .init(option: .background, title: "Background"),
                         .init(option: .openURL, title: "Open URL"),
                     ], selection: $action.kind, trackFill: .black.opacity(0.28), selectedFill: .white.opacity(0.18),
-                    text: Tokens.Palette.settingsLabel, selectedText: .white, height: 28)
-                    .fixedSize()
+                    text: Tokens.Palette.settingsLabel, selectedText: .white, height: Tokens.Size.settingsControl)
                 }
+                .frame(width: Self.sideColumn)
             }
             HStack(alignment: .top, spacing: 12) {
                 field("Symbol") { SymbolPicker(symbol: $action.symbol) }
-                if action.kind == .openURL {
-                    field("Allowed URL schemes") {
-                        TextField("https, diagram", text: $schemesText)
-                            .textFieldStyle(SettingsFieldStyle())
-                            .onSubmit(commitSchemes)
-                            .onChange(of: schemesText) { commitSchemes() }
+                Group {
+                    if action.kind == .openURL {
+                        field("Allowed URL schemes") {
+                            TextField("https, diagram", text: $schemesText)
+                                .textFieldStyle(SettingsFieldStyle())
+                                .onSubmit(commitSchemes)
+                                .onChange(of: schemesText) { commitSchemes() }
+                        }
+                    } else {
+                        Color.clear.frame(height: 0)
                     }
-                } else {
-                    Spacer()
                 }
+                .frame(width: Self.sideColumn)
             }
             field(action.kind == .openURL ? "URL" : "Command") {
                 TemplateEditor(text: $action.template)
@@ -207,7 +212,7 @@ private struct ActionEditor: View {
             }
             HStack(spacing: 22) {
                 HStack(spacing: 10) {
-                    SettingsLabel("Repeat")
+                    Text("Repeat").font(Tokens.Typo.settingsBody.weight(.semibold))
                     RepeatStepper(value: $action.repeatCount)
                 }
                 Toggle("Run when I press Start", isOn: $action.runOnStart)
