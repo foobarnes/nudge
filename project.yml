@@ -27,7 +27,9 @@ targets:
       - package: Sparkle
     settings:
       base:
-        PRODUCT_NAME: Nudge
+        # Not plain "Nudge": macadmins Nudge (an MDM OS-update tool) shares that process name, so `killall Nudge`
+        # aimed at it would quit this app too. Users still see "Nudge" via CFBundleDisplayName in Info.plist.
+        PRODUCT_NAME: Nudge PRs
         PRODUCT_BUNDLE_IDENTIFIER: io.github.foobarnes.nudge
         INFOPLIST_FILE: App/Info.plist
         CODE_SIGN_ENTITLEMENTS: App/Nudge.entitlements
