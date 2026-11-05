@@ -32,6 +32,7 @@ targets:
         # so `killall Nudge` aimed at it would quit this app too. The bundle stays Nudge.app.
         EXECUTABLE_NAME: Nudge PRs
         PRODUCT_BUNDLE_IDENTIFIER: io.github.foobarnes.nudge
+        NUDGE_DISPLAY_NAME: Nudge
         INFOPLIST_FILE: App/Info.plist
         CODE_SIGN_ENTITLEMENTS: App/Nudge.entitlements
         # Set by the Release workflow; empty in local builds, which turns the updater off.
@@ -54,3 +55,9 @@ targets:
       configs:
         Debug:
           SWIFT_ACTIVE_COMPILATION_CONDITIONS: DEBUG
+          # Its own app, so a dev build runs beside the installed release without sharing its settings, process name,
+          # or login item.
+          PRODUCT_NAME: Nudge Dev
+          EXECUTABLE_NAME: Nudge PRs Dev
+          PRODUCT_BUNDLE_IDENTIFIER: io.github.foobarnes.nudge.dev
+          NUDGE_DISPLAY_NAME: Nudge Dev

@@ -57,4 +57,4 @@ The script stores these repo secrets and variables:
 
 ## Local builds
 
-Local builds (`make build`, `make run`) are ad-hoc signed and have no Sparkle key, so the updater stays off. A dev build never replaces itself with a release.
+Local builds (`make build`, `make run`) are ad-hoc signed and have no Sparkle key, so the updater stays off. A dev build never replaces itself with a release. They build the Debug configuration, a separate "Nudge Dev" app with its own bundle ID, so nothing local overwrites or shares state with the installed release.
