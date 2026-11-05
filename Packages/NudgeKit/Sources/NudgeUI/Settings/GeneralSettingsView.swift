@@ -201,6 +201,9 @@ struct MinutePicker: View {
     var body: some View {
         TimeFieldRepresentable(minute: $minute)
             .fixedSize()
+            // NSDatePicker's cell draws its text high and leaves extra room on the leading side; this optically
+            // centers it in the field (measured from gallery captures).
+            .offset(x: -3.75, y: 1.25)
             .settingsFieldChrome()
             .accessibilityLabel(title)
     }
