@@ -3,13 +3,15 @@ SHELL := /bin/bash
 
 PACKAGE_DIR := Packages/NudgeKit
 APP_NAME    := Nudge
-# The process name (EXECUTABLE_NAME in project.yml); the bundle is still $(APP_NAME).app.
-PROCESS     := Nudge PRs
+# Debug builds are a separate app, "Nudge Dev" (its own bundle ID), so they never touch the installed release.
+# Bundle and process names come from PRODUCT_NAME / EXECUTABLE_NAME in project.yml.
+DEV_BUNDLE  := Nudge Dev
+DEV_PROCESS := Nudge PRs Dev
 DERIVED     := $(PWD)/DerivedData
-INSTALLED   := /Applications/$(APP_NAME).app
+DEV_APP     := $(DERIVED)/Build/Products/Debug/$(DEV_BUNDLE).app
 ARGS        ?=
 
-.PHONY: help bootstrap gen build test run run-debug dmg clean
+.PHONY: help bootstrap gen build test run stop dmg clean
 
 help: ## Show this help
 	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN{FS=":.*?## "}{printf "  \033[36m%-12s\033[0m %s\n", $$1, $$2}'
@@ -21,25 +23,21 @@ bootstrap: ## Install tooling and generate the Xcode project
 gen: ## Generate Nudge.xcodeproj from project.yml
 	@xcodegen generate --spec project.yml --quiet && echo "Generated $(APP_NAME).xcodeproj"
 
-build: gen ## Build the app (Debug)
+build: gen ## Build the dev app (Debug)
 	xcodebuild -project $(APP_NAME).xcodeproj -scheme $(APP_NAME) -configuration Debug -derivedDataPath $(DERIVED) -quiet build
 
 test: ## Run the package test suite
 	cd $(PACKAGE_DIR) && swift test
 
-run: gen ## Build Release, install to /Applications, relaunch
-	xcodebuild -project $(APP_NAME).xcodeproj -scheme $(APP_NAME) -configuration Release -derivedDataPath $(DERIVED) -quiet build
-	-pkill -x "$(PROCESS)"
-	rm -rf "$(INSTALLED)" && cp -R "$(DERIVED)/Build/Products/Release/$(APP_NAME).app" "$(INSTALLED)"
-	open "$(INSTALLED)"
+run: build stop ## Build and run the dev app in the foreground with ARGS (e.g. ARGS="-NudgeFixture path.json"); Ctrl-C quits
+	-"$(DEV_APP)/Contents/MacOS/$(DEV_PROCESS)" $(ARGS)
 
-run-debug: build ## Build Debug and launch it with ARGS (e.g. ARGS="-NudgeFixture path.json")
-	-pkill -x "$(PROCESS)"
-	"$(DERIVED)/Build/Products/Debug/$(APP_NAME).app/Contents/MacOS/$(PROCESS)" $(ARGS) &
+stop: ## Quit every running dev build, from any worktree (never the installed release)
+	@pkill -x "$(DEV_PROCESS)" && echo "Stopped running dev builds" || true
 
-dmg: gen ## Build Release into build/ and package an unsigned build/Nudge.dmg (doesn't install or relaunch)
+dmg: gen ## Build Release into build/ and package an unsigned build/Nudge.dmg (doesn't install or launch)
 	xcodebuild -project $(APP_NAME).xcodeproj -scheme $(APP_NAME) -configuration Release -derivedDataPath $(PWD)/build/DerivedData -quiet build
 	scripts/make-dmg.sh "$(PWD)/build/DerivedData/Build/Products/Release/$(APP_NAME).app" $(PWD)/build/$(APP_NAME).dmg
 
-clean: ## Remove build output and the generated project
+clean: stop ## Quit dev builds, then remove build output and the generated project
 	rm -rf $(DERIVED) $(APP_NAME).xcodeproj $(PACKAGE_DIR)/.build

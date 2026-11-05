@@ -102,7 +102,13 @@ final class StatusItemController {
     private func render(_ a: Appearance) {
         guard let button = item.button else { return }
         button.image = .nudgeGlyph(stale: a.isStale)
-        button.title = a.count > 0 ? "\(a.count)" : ""
+        let count = a.count > 0 ? "\(a.count)" : ""
+        #if DEBUG
+        // Tells a dev build apart from the installed release sitting next to it in the menu bar.
+        button.title = count.isEmpty ? "DEV" : "DEV \(count)"
+        #else
+        button.title = count
+        #endif
         let waiting = a.count == 1 ? "1 review waiting" : "\(a.count) reviews waiting"
         button.setAccessibilityLabel("Nudge, \(waiting)\(a.isStale ? ", sync problem" : "")")
     }

@@ -57,9 +57,14 @@ Requires **macOS 26 or later**. Nudge updates itself after that.
 
 ```sh
 make bootstrap   # once: tools + Xcode project
-make run-debug   # build Debug and launch it
+make run         # build and run "Nudge Dev" in the foreground; Ctrl-C quits
+make stop        # quit dev builds left running in any worktree
 make test        # package tests
 ```
+
+Debug builds are a separate app, "Nudge Dev" (bundle ID `io.github.foobarnes.nudge.dev`, a **DEV** tag in the menu
+bar), so they run beside your installed Nudge without sharing its settings or login item. Install Nudge itself only
+from releases.
 
 The design spec lives in [`docs/specs/`](docs/specs/). Every merge to `main` ships a signed, notarized release with generated notes, and PR titles must be [Conventional Commits](https://www.conventionalcommits.org). See [docs/releasing.md](docs/releasing.md).
 
