@@ -205,10 +205,12 @@ struct TimerText: View {
     var tracking: CGFloat = -0.36
     /// Stale sync: keeps counting in the secondary color (States board).
     var greyed = false
+    /// Hovered in a row: underlined, so the work-time breakdown reads as something the timer offers.
+    var underlined = false
 
     var body: some View {
         TimelineView(.periodic(from: .now, by: live ? 1 : 60)) { context in
-            Text(label(at: context.date))
+            Text(label(at: context.date)).underline(underlined)
         }
         .font(font)
         .monospacedDigit()

@@ -221,7 +221,6 @@ private struct SnoozedRowView: View {
                     }
             }
             .padding(.horizontal, Tokens.Space.rowH).padding(.vertical, Tokens.Space.rowV)
-            .background { CursorArea(cursor: actionsHovered ? .arrow : .pointingHand) }
         }
         .buttonStyle(RowButtonStyle(highlighted: hovered || showSnooze))
         .focusable(false)

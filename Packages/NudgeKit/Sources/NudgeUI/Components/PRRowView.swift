@@ -1,10 +1,9 @@
-import AppKit
 import NudgeCore
 import SwiftUI
 
 /// One request, shared by the expanded pill and the dropdown. The whole row is one button that opens the PR
-/// (pointing-hand cursor, hover and pressed fills); only the action buttons on the second line are their own
-/// targets. Hover (or keyboard focus) cross-fades the work chip into the icon actions, and while the pointer is
+/// (hover and pressed fills; the cursor stays an arrow because macOS ignores cursor changes from an inactive app,
+/// which Nudge always is); only the action buttons on the second line are their own targets. Hover (or keyboard focus) cross-fades the work chip into the icon actions, and while the pointer is
 /// over one of them the subtitle becomes that button's name. The timer never moves.
 struct PRRowView: View {
     let row: PRRow
@@ -19,6 +18,7 @@ struct PRRowView: View {
     @State private var actionsHovered = false
     @State private var showSnooze = false
     @State private var showBreakdown = false
+    @State private var timerHovered = false
     @State private var breakdownTask: Task<Void, Never>?
     @State private var actionLabel = ActionLabel()
 
@@ -61,7 +61,8 @@ struct PRRowView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .contentShape(Rectangle())
                         .onHover { textHovered = $0 }
-                    TimerText(since: row.pr.waitingSince, tier: row.tier, live: live)
+                    TimerText(since: row.pr.waitingSince, tier: row.tier, live: live, underlined: timerHovered)
+                        .animation(.easeOut(duration: 0.12), value: timerHovered)
                         .onHover(perform: hoverTimer)
                         .anchoredPopover(isPresented: $showBreakdown, arrowEdge: .bottom) {
                             WorkTimePopover(row: row, config: state.settings.workHours, thresholds: state.settings.thresholds)
@@ -80,7 +81,6 @@ struct PRRowView: View {
         }
         .padding(.horizontal, Tokens.Space.rowH)
         .padding(.vertical, Tokens.Space.rowV)
-        .background { CursorArea(cursor: actionsHovered ? .arrow : .pointingHand) }
     }
 
     /// `owner/repo #n · author`, or the hovered action button's name in the same spot (0.12s cross-fade).
@@ -97,7 +97,7 @@ struct PRRowView: View {
             .accessibilityHidden(label != nil)
     }
 
-    /// Their own click targets inside the row button: arrow cursor, and no hover card while the pointer is over them.
+    /// Their own click targets inside the row button; no hover card while the pointer is over them.
     private var actions: some View {
         HStack(spacing: 10) {
             SplitIconMenuButton(symbol: "play.fill", label: "Start review", menuLabel: "Run one action", role: .accent) {
@@ -135,6 +135,7 @@ struct PRRowView: View {
     }
 
     private func hoverTimer(_ inside: Bool) {
+        timerHovered = inside
         breakdownTask?.cancel()
         if inside {
             breakdownTask = Task {
@@ -147,7 +148,7 @@ struct PRRowView: View {
     }
 }
 
-/// The row as a button: pointing hand, `fillHover` while hovered (or active, or with its snooze menu open),
+/// The row as a button: `fillHover` while hovered (or active, or with its snooze menu open),
 /// `fillStrong` while pressed, over the faint tier tint.
 struct RowButtonStyle: ButtonStyle {
     let highlighted: Bool
@@ -167,63 +168,6 @@ struct RowButtonStyle: ButtonStyle {
     private func fill(pressed: Bool) -> Color {
         if pressed { return Tokens.Palette.fillStrong }
         return highlighted ? Tokens.Palette.fillHover : .clear
-    }
-}
-
-/// Sets the cursor while the pointer is over the view. SwiftUI's `.pointerStyle` relies on cursor-update events,
-/// which the non-activating pill panel never receives, so the row sets `NSCursor` itself from an always-active
-/// tracking area, and re-asserts it on every move because AppKit's idea of the current cursor can drift from what
-/// the window server shows for an inactive app. Never hit-tested: clicks go to the SwiftUI content around it.
-struct CursorArea: NSViewRepresentable {
-    let cursor: NSCursor
-
-    func makeNSView(context: Context) -> CursorAreaView { BackgroundCursor.enable(); return CursorAreaView() }
-
-    func updateNSView(_ view: CursorAreaView, context: Context) { view.cursor = cursor }
-
-    final class CursorAreaView: NSView {
-        var cursor: NSCursor = .arrow {
-            didSet { if inside, cursor != oldValue { cursor.set() } }
-        }
-        private var inside = false
-        private var area: NSTrackingArea?
-
-        override func updateTrackingAreas() {
-            super.updateTrackingAreas()
-            if let area { removeTrackingArea(area) }
-            let area = NSTrackingArea(rect: .zero, options: [.activeAlways, .inVisibleRect, .mouseEnteredAndExited, .mouseMoved],
-                                      owner: self, userInfo: nil)
-            addTrackingArea(area)
-            self.area = area
-        }
-
-        override func mouseEntered(with event: NSEvent) { inside = true; cursor.set() }
-        override func mouseMoved(with event: NSEvent) { if inside { cursor.set() } }
-        override func mouseExited(with event: NSEvent) { inside = false; NSCursor.arrow.set() }
-        override func hitTest(_ point: NSPoint) -> NSView? { nil }
-        override func viewDidMoveToWindow() {
-            super.viewDidMoveToWindow()
-            if window == nil, inside { inside = false; NSCursor.arrow.set() }
-        }
-    }
-}
-
-/// The window server ignores cursor changes from an inactive app unless its connection sets
-/// `SetsCursorInBackground`. Private CoreGraphics API (as used by Hammerspoon, Rectangle, and others), looked up at
-/// run time: if either symbol is missing the cursor simply stays an arrow.
-@MainActor enum BackgroundCursor {
-    private static var enabled = false
-
-    static func enable() {
-        guard !enabled else { return }
-        enabled = true
-        typealias MainConnection = @convention(c) () -> Int32
-        typealias SetProperty = @convention(c) (Int32, Int32, CFString, CFTypeRef) -> Int32
-        guard let handle = dlopen("/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics", RTLD_LAZY),
-              let main = dlsym(handle, "CGSMainConnectionID"), let set = dlsym(handle, "CGSSetConnectionProperty")
-        else { return }
-        let cid = unsafeBitCast(main, to: MainConnection.self)()
-        _ = unsafeBitCast(set, to: SetProperty.self)(cid, cid, "SetsCursorInBackground" as CFString, kCFBooleanTrue)
     }
 }
 

@@ -277,7 +277,7 @@ struct HoverCardPresenter: ViewModifier {
             }
             .onChange(of: cards.clicks) { _, _ in disarm() }
             .onChange(of: cards.suppressed) { _, suppressed in
-                if suppressed { disarm(); cards.close(row.id) }
+                if suppressed { disarm(); cards.close(row.id) } else if rowHovered { arm(after: Self.rowDelay) }
             }
             .onDisappear { disarm(); closeTask?.cancel(); cards.close(row.id) }
             .accessibilityCustomContent(Text("Details"), Text(verbatim: PRHoverCard(row: row, intents: intents).summary))
@@ -356,8 +356,12 @@ private struct AnchoredPopover<Content: View>: NSViewRepresentable {
             let popover = coordinator.popover(for: content())
             guard !popover.isShown else { return }
             DispatchQueue.main.async {
-                guard coordinator.wantsShown, !popover.isShown, view.window != nil else { return }
-                popover.show(relativeTo: view.bounds, of: view, preferredEdge: edge)
+                guard coordinator.wantsShown, !popover.isShown, let window = view.window,
+                      let root = window.contentView else { return }
+                // Anchored to the window's content view with the anchor's converted frame, so the popover never
+                // tracks SwiftUI's re-layout of the hosted anchor view.
+                let rect = root.convert(view.convert(view.bounds, to: nil), from: nil)
+                popover.show(relativeTo: rect, of: root, preferredEdge: edge)
             }
         } else if let popover = coordinator.popoverIfLoaded, popover.isShown {
             popover.close()
@@ -388,6 +392,7 @@ private struct AnchoredPopover<Content: View>: NSViewRepresentable {
         func popover(for content: Content) -> NSPopover {
             if let popover = popoverIfLoaded, let host {
                 host.rootView = content
+                popover.contentSize = host.preferredContentSize
                 return popover
             }
             let host = PopoverContentController(rootView: content)
@@ -395,6 +400,7 @@ private struct AnchoredPopover<Content: View>: NSViewRepresentable {
             popover.behavior = .applicationDefined
             popover.animates = true
             popover.contentViewController = host
+            popover.contentSize = host.preferredContentSize
             popover.delegate = self
             self.host = host
             popoverIfLoaded = popover
@@ -414,6 +420,7 @@ private final class PopoverContentController<Content: View>: NSViewController {
 
     init(rootView: Content) {
         hosting = FirstMouseHostingView(rootView: rootView)
+        hosting.sizingOptions = [.intrinsicContentSize]
         super.init(nibName: nil, bundle: nil)
     }
 
@@ -429,7 +436,13 @@ private final class PopoverContentController<Content: View>: NSViewController {
         set { hosting.rootView = newValue; fit() }
     }
 
-    private func fit() { preferredContentSize = hosting.fittingSize }
+    /// The popover must know the content's size before it shows: it positions itself for `contentSize` (320×320 by
+    /// default) and a later shrink keeps the bottom edge, leaving the popover well below its anchor.
+    private func fit() {
+        hosting.layoutSubtreeIfNeeded()
+        let size = hosting.fittingSize
+        if size.width > 0, size.height > 0 { preferredContentSize = size }
+    }
 }
 
 private final class FirstMouseHostingView<Content: View>: NSHostingView<Content> {
