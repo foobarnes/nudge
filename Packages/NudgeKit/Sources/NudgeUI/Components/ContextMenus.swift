@@ -42,6 +42,7 @@ struct RowContextMenu: View {
         Divider()
         Button { copy(row.pr.url.absoluteString) } label: { Label("Copy Link", systemImage: "link") }
         Button { copy(row.pr.title) } label: { Label("Copy Title", systemImage: "doc.on.doc") }
+        Button { copy(row.pr.headRef) } label: { Label("Copy Branch", systemImage: "arrow.triangle.branch") }
         Button { copy("\(row.pr.repo)#\(row.pr.number)") } label: {
             Label("Copy “\(row.pr.repo)#\(String(row.pr.number))”", systemImage: "number")
         }

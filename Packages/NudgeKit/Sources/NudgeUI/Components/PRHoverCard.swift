@@ -7,7 +7,8 @@ struct PRHoverCard: View {
     let row: PRRow
     let intents: NudgeIntents
     var now: Date = .now
-    @State private var copied = false
+    @State private var copiedLink = false
+    @State private var copiedBranch = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -16,9 +17,9 @@ struct PRHoverCard: View {
                 .fixedSize(horizontal: false, vertical: true)
                 .textSelection(.enabled)
 
-            ViewThatFits(in: .horizontal) {
-                HStack(spacing: 6) { repoLine; dotSeparator; branchChip }
-                VStack(alignment: .leading, spacing: 4) { repoLine; branchChip }
+            VStack(alignment: .leading, spacing: 6) {
+                repoLine
+                branchLine
             }
             .font(Tokens.Typo.rowSubtitle)
             .foregroundStyle(Tokens.Palette.secondary)
@@ -38,41 +39,46 @@ struct PRHoverCard: View {
             HStack(spacing: Tokens.Space.actionsGap) {
                 Button { intents.open(row) } label: { Label("Open on GitHub", systemImage: "arrow.up.right") }
                     .buttonStyle(MiniButtonStyle(role: .primary))
-                Button(action: copyLink) {
-                    Label(copied ? "Copied" : "Copy link", systemImage: copied ? "checkmark" : "link")
+                Button { copy(row.pr.url.absoluteString, flag: $copiedLink) } label: {
+                    Label(copiedLink ? "Copied" : "Copy link", systemImage: copiedLink ? "checkmark" : "link")
                         .contentTransition(.opacity)
                 }
                 .buttonStyle(MiniButtonStyle())
-                .animation(Motion.crossfade, value: copied)
+                .animation(Motion.crossfade, value: copiedLink)
             }
             .labelStyle(MiniLabelStyle())
             .padding(.top, 2)
         }
         .padding(14)
-        .frame(minWidth: 280, maxWidth: 360, alignment: .leading)
+        .frame(width: 360, alignment: .leading)   // fixed: a width range measures the branch unwrapped and clips its height
         .fixedSize(horizontal: false, vertical: true)
         .foregroundStyle(Tokens.Palette.text)
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Details for \(row.pr.title)")
     }
 
-    private var dotSeparator: some View { Text("·") }
-
     private var repoLine: some View {
         HStack(spacing: 6) {
             Text(verbatim: "\(row.pr.repo) #\(row.pr.number)").fontWeight(.semibold)
-            dotSeparator
+            Text("·")
             Text("by \(row.pr.author)")
         }
         .fixedSize()
     }
 
-    private var branchChip: some View {
-        Text(row.pr.headRef)
-            .font(Tokens.Typo.codeSmall)
-            .padding(.horizontal, 5).padding(.vertical, 1)
-            .background(Tokens.Palette.fill, in: RoundedRectangle(cornerRadius: 5, style: .continuous))
-            .fixedSize()
+    /// The branch wraps (up to three lines; the card never clips it) with a copy button beside it.
+    private var branchLine: some View {
+        HStack(alignment: .top, spacing: 4) {
+            Text(row.pr.headRef)
+                .font(Tokens.Typo.codeSmall)
+                .lineLimit(3)
+                .truncationMode(.middle)
+                .textSelection(.enabled)
+                .padding(.horizontal, 5).padding(.vertical, 1)
+                .background(Tokens.Palette.fill, in: RoundedRectangle(cornerRadius: 5, style: .continuous))
+                .fixedSize(horizontal: false, vertical: true)
+            CopyIconButton(copied: copiedBranch, label: "Copy branch name") { copy(row.pr.headRef, flag: $copiedBranch) }
+        }
     }
 
     private var requestLine: String {
@@ -133,14 +139,49 @@ struct PRHoverCard: View {
         return parts.joined(separator: ". ")
     }
 
-    private func copyLink() {
+    /// Copies `text` and raises `flag` for 1.5s so the button can show a check.
+    private func copy(_ text: String, flag: Binding<Bool>) {
         NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(row.pr.url.absoluteString, forType: .string)
-        copied = true
+        NSPasteboard.general.setString(text, forType: .string)
+        flag.wrappedValue = true
         Task {
             try? await Task.sleep(for: .milliseconds(1500))
-            copied = false
+            flag.wrappedValue = false
         }
+    }
+}
+
+/// 20pt copy glyph that turns into a green check while `copied` is set. Arrow cursor, like every button.
+struct CopyIconButton: View {
+    let copied: Bool
+    let label: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: copied ? "checkmark" : "doc.on.doc")
+                .foregroundStyle(copied ? Tokens.Palette.check : Tokens.Palette.secondary)
+                .contentTransition(.symbolEffect(.replace))
+        }
+        .buttonStyle(CopyIconButtonStyle())
+        .focusable(false)
+        .animation(Motion.crossfade, value: copied)
+        .accessibilityLabel(copied ? "Copied" : label)
+    }
+}
+
+private struct CopyIconButtonStyle: ButtonStyle {
+    @State private var hovered = false
+
+    func makeBody(configuration: Configuration) -> some View {
+        let shape = RoundedRectangle(cornerRadius: 5, style: .continuous)
+        configuration.label
+            .font(.system(size: 10, weight: .bold))
+            .frame(width: 20, height: 20)
+            .background(Tokens.Palette.text.opacity(configuration.isPressed ? 0.18 : hovered ? 0.11 : 0), in: shape)
+            .contentShape(shape)
+            .onHover { hovered = $0 }
+            .animation(.easeOut(duration: 0.12), value: hovered)
     }
 }
 
@@ -153,6 +194,8 @@ final class HoverCardCoordinator {
     var scrolling = false
     var menuOpen = false
     var popoverOpen = false
+    /// Bumped by any row click. Presenters drop their pending open so a card never pops right after a click.
+    private(set) var clicks = 0
     @ObservationIgnored private var observers: [any NSObjectProtocol] = []
 
     nonisolated init() {}
@@ -165,6 +208,12 @@ final class HoverCardCoordinator {
 
     func close(_ id: String) {
         if openID == id { openID = nil }
+    }
+
+    /// A row was clicked (open, start, snooze, hide): the card is done.
+    func rowClicked() {
+        openID = nil
+        clicks += 1
     }
 
     /// Tracks NSMenu sessions (Start ⌄ and the system menus) so cards never open under a menu.
@@ -186,17 +235,22 @@ extension EnvironmentValues {
     @Entry var hoverCards = HoverCardCoordinator()
 }
 
-/// Hover intent: ~450ms over the trigger opens, instant when another card is already open,
-/// ~200ms after leaving both row and card closes.
+/// Hover intent: ~450ms over the title or subtitle opens, ~900ms anywhere else on the row (never over the action
+/// buttons), instant when another card is already open, ~200ms after leaving both row and card closes.
 struct HoverCardPresenter: ViewModifier {
+    static let textDelay: Duration = .milliseconds(450)
+    static let rowDelay: Duration = .milliseconds(900)
+
     let row: PRRow
     let intents: NudgeIntents
     let arrowEdge: Edge
-    let triggerHovered: Bool
+    let textHovered: Bool
     let rowHovered: Bool
+    let actionsHovered: Bool
     @Environment(\.hoverCards) private var cards
     @State private var cardHovered = false
     @State private var openTask: Task<Void, Never>?
+    @State private var deadline: ContinuousClock.Instant?
     @State private var closeTask: Task<Void, Never>?
 
     private var isPresented: Binding<Bool> {
@@ -205,40 +259,55 @@ struct HoverCardPresenter: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .popover(isPresented: isPresented, arrowEdge: arrowEdge) {
+            .anchoredPopover(isPresented: isPresented, arrowEdge: arrowEdge) {
                 PRHoverCard(row: row, intents: intents)
                     .onHover { inside in
                         cardHovered = inside
                         inside ? cancelClose() : scheduleClose()
                     }
             }
-            .onChange(of: triggerHovered) { _, inside in
-                if inside { scheduleOpen() } else { openTask?.cancel() }
-            }
             .onChange(of: rowHovered) { _, inside in
-                if inside { cancelClose() } else if !cardHovered { scheduleClose() }
+                if inside { arm(after: Self.rowDelay) } else { disarm(); if !cardHovered { scheduleClose() } }
             }
+            .onChange(of: textHovered) { _, inside in
+                if inside { arm(after: Self.textDelay) }
+            }
+            .onChange(of: actionsHovered) { _, inside in
+                if inside { disarm() } else if rowHovered { arm(after: Self.rowDelay) }
+            }
+            .onChange(of: cards.clicks) { _, _ in disarm() }
             .onChange(of: cards.suppressed) { _, suppressed in
-                if suppressed { openTask?.cancel(); cards.close(row.id) }
+                if suppressed { disarm(); cards.close(row.id) }
             }
-            .onDisappear { openTask?.cancel(); closeTask?.cancel(); cards.close(row.id) }
+            .onDisappear { disarm(); closeTask?.cancel(); cards.close(row.id) }
             .accessibilityCustomContent(Text("Details"), Text(verbatim: PRHoverCard(row: row, intents: intents).summary))
             .accessibilityAction(named: "Show details") { cards.toggle(row.id) }
     }
 
-    private func scheduleOpen() {
-        guard !cards.suppressed else { return }
-        openTask?.cancel()
+    /// Opens after `delay`, unless an earlier deadline is already pending. Switches instantly between open cards.
+    private func arm(after delay: Duration) {
+        guard !cards.suppressed, !actionsHovered else { return }
         closeTask?.cancel()
         if let open = cards.openID, open != row.id {
             cards.openID = row.id
             return
         }
+        let target = ContinuousClock.now + delay
+        if let deadline, deadline <= target { return }
+        openTask?.cancel()
+        deadline = target
         openTask = Task {
-            try? await Task.sleep(for: .milliseconds(450))
-            guard !Task.isCancelled, !cards.suppressed else { return }
-            cards.openID = row.id
+            try? await Task.sleep(until: target, clock: .continuous)
+            guard !Task.isCancelled else { return }
+            deadline = nil
+            if !cards.suppressed { cards.openID = row.id }
         }
+    }
+
+    private func disarm() {
+        openTask?.cancel()
+        openTask = nil
+        deadline = nil
     }
 
     private func scheduleClose() {
@@ -254,10 +323,120 @@ struct HoverCardPresenter: ViewModifier {
 }
 
 extension View {
-    func hoverCard(row: PRRow, intents: NudgeIntents, arrowEdge: Edge, triggerHovered: Bool, rowHovered: Bool) -> some View {
+    func hoverCard(row: PRRow, intents: NudgeIntents, arrowEdge: Edge,
+                   textHovered: Bool, rowHovered: Bool, actionsHovered: Bool = false) -> some View {
         modifier(HoverCardPresenter(row: row, intents: intents, arrowEdge: arrowEdge,
-                                    triggerHovered: triggerHovered, rowHovered: rowHovered))
+                                    textHovered: textHovered, rowHovered: rowHovered, actionsHovered: actionsHovered))
     }
+
+    /// An `NSPopover` with `.applicationDefined` behavior anchored to this view: a click outside it is never swallowed
+    /// (it reaches the row underneath), so the caller closes it by hover intent through `isPresented`.
+    /// SwiftUI's `.popover` is transient and eats the dismissing click, which is why a row click under an open
+    /// card used to do nothing.
+    func anchoredPopover<Content: View>(isPresented: Binding<Bool>, arrowEdge: Edge,
+                                        @ViewBuilder content: @escaping () -> Content) -> some View {
+        background { AnchoredPopover(isPresented: isPresented, arrowEdge: arrowEdge, content: content) }
+    }
+}
+
+private struct AnchoredPopover<Content: View>: NSViewRepresentable {
+    @Binding var isPresented: Bool
+    let arrowEdge: Edge
+    let content: () -> Content
+
+    func makeCoordinator() -> Coordinator { Coordinator() }
+
+    func makeNSView(context: Context) -> NSView { NSView(frame: .zero) }
+
+    func updateNSView(_ view: NSView, context: Context) {
+        let coordinator = context.coordinator
+        coordinator.onClose = { isPresented = false }
+        coordinator.wantsShown = isPresented
+        if isPresented {
+            let popover = coordinator.popover(for: content())
+            guard !popover.isShown else { return }
+            DispatchQueue.main.async {
+                guard coordinator.wantsShown, !popover.isShown, view.window != nil else { return }
+                popover.show(relativeTo: view.bounds, of: view, preferredEdge: edge)
+            }
+        } else if let popover = coordinator.popoverIfLoaded, popover.isShown {
+            popover.close()
+        }
+    }
+
+    static func dismantleNSView(_ view: NSView, coordinator: Coordinator) {
+        coordinator.wantsShown = false
+        coordinator.popoverIfLoaded?.close()
+    }
+
+    /// SwiftUI's `arrowEdge` names the anchor edge the arrow touches; so does `preferredEdge` in an unflipped view.
+    private var edge: NSRectEdge {
+        switch arrowEdge {
+        case .top: .maxY
+        case .bottom: .minY
+        case .leading: .minX
+        case .trailing: .maxX
+        }
+    }
+
+    @MainActor final class Coordinator: NSObject, NSPopoverDelegate {
+        var wantsShown = false
+        var onClose: () -> Void = {}
+        private(set) var host: PopoverContentController<Content>?
+        private(set) var popoverIfLoaded: NSPopover?
+
+        func popover(for content: Content) -> NSPopover {
+            if let popover = popoverIfLoaded, let host {
+                host.rootView = content
+                return popover
+            }
+            let host = PopoverContentController(rootView: content)
+            let popover = NSPopover()
+            popover.behavior = .applicationDefined
+            popover.animates = true
+            popover.contentViewController = host
+            popover.delegate = self
+            self.host = host
+            popoverIfLoaded = popover
+            return popover
+        }
+
+        nonisolated func popoverDidClose(_ notification: Notification) {
+            MainActor.assumeIsolated { if wantsShown { onClose() } }
+        }
+    }
+}
+
+/// Hosts the popover's SwiftUI content in a view that takes the first click. Nudge is never the active app, so
+/// without this the first click on a card button only "activates" the popover window and is lost.
+private final class PopoverContentController<Content: View>: NSViewController {
+    private let hosting: FirstMouseHostingView<Content>
+
+    init(rootView: Content) {
+        hosting = FirstMouseHostingView(rootView: rootView)
+        super.init(nibName: nil, bundle: nil)
+    }
+
+    @available(*, unavailable) required init?(coder: NSCoder) { fatalError() }
+
+    override func loadView() {
+        view = hosting
+        fit()
+    }
+
+    var rootView: Content {
+        get { hosting.rootView }
+        set { hosting.rootView = newValue; fit() }
+    }
+
+    private func fit() { preferredContentSize = hosting.fittingSize }
+}
+
+private final class FirstMouseHostingView<Content: View>: NSHostingView<Content> {
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+    /// A click makes the popover window active, and an active popover draws its content with vibrant blending,
+    /// which washes the secondary text out. The card's own colors are tuned for glass already.
+    override var allowsVibrancy: Bool { false }
 }
 
 extension ScreenEdge {

@@ -198,36 +198,45 @@ private struct SnoozedRowView: View {
     let intents: NudgeIntents
     @Environment(\.hoverCards) private var cards
     @State private var hovered = false
-    @State private var titleHovered = false
+    @State private var textHovered = false
+    @State private var actionsHovered = false
     @State private var showSnooze = false
 
     var body: some View {
-        HStack(spacing: Tokens.Space.rowGap) {
-            TierDot(tier: row.tier, isTeam: row.pr.via.isTeam, dimmed: true)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(row.pr.title).font(Tokens.Typo.rowTitle).foregroundStyle(Tokens.Palette.secondary).lineLimit(1)
-                Text(row.snoozedUntil.map { "back at \(Format.weekdayTimeIfNotToday($0))" } ?? row.subtitle)
-                    .font(Tokens.Typo.rowSubtitle).foregroundStyle(Tokens.Palette.secondary)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .contentShape(Rectangle())
-            .onHover { titleHovered = $0 }
-            IconButton(symbol: "moon.slash", label: "Unsnooze") { intents.unsnooze(row) }
-                .popover(isPresented: $showSnooze, arrowEdge: .bottom) {
-                    SnoozeMenu(row: row, state: state, intents: intents) { showSnooze = false }
+        Button { cards.rowClicked(); intents.open(row) } label: {
+            HStack(spacing: Tokens.Space.rowGap) {
+                TierDot(tier: row.tier, isTeam: row.pr.via.isTeam, dimmed: true)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(row.pr.title).font(Tokens.Typo.rowTitle).foregroundStyle(Tokens.Palette.secondary).lineLimit(1)
+                    Text(row.snoozedUntil.map { "back at \(Format.weekdayTimeIfNotToday($0))" } ?? row.subtitle)
+                        .font(Tokens.Typo.rowSubtitle).foregroundStyle(Tokens.Palette.secondary)
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
+                .onHover { textHovered = $0 }
+                IconButton(symbol: "moon.slash", label: "Unsnooze") { cards.rowClicked(); intents.unsnooze(row) }
+                    .onHover { actionsHovered = $0 }
+                    .popover(isPresented: $showSnooze, arrowEdge: .bottom) {
+                        SnoozeMenu(row: row, state: state, intents: intents) { showSnooze = false }
+                    }
+            }
+            .padding(.horizontal, Tokens.Space.rowH).padding(.vertical, Tokens.Space.rowV)
+            .background { CursorArea(cursor: actionsHovered ? .arrow : .pointingHand) }
         }
-        .padding(.horizontal, Tokens.Space.rowH).padding(.vertical, Tokens.Space.rowV)
-        .contentShape(Rectangle())
+        .buttonStyle(RowButtonStyle(highlighted: hovered || showSnooze))
+        .focusable(false)
         .onHover { hovered = $0 }
-        .hoverCard(row: row, intents: intents, arrowEdge: .bottom, triggerHovered: titleHovered, rowHovered: hovered)
+        .hoverCard(row: row, intents: intents, arrowEdge: .bottom,
+                   textHovered: textHovered, rowHovered: hovered, actionsHovered: actionsHovered)
         .contextMenu {
             RowContextMenu(row: row, state: state, intents: intents, isSnoozed: true,
                            customSnooze: { showSnooze = true }, showDetails: { cards.toggle(row.id) })
         }
         .onChange(of: showSnooze) { _, open in cards.popoverOpen = open }
+        .motion(Motion.crossfade, value: hovered)
         .accessibilityElement(children: .contain)
         .accessibilityLabel(row.accessibilityLabel)
+        .accessibilityHint("Opens the pull request")
     }
 }
 
