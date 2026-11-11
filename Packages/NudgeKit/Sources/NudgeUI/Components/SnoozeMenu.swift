@@ -9,7 +9,13 @@ struct SnoozeMenu: View {
     let dismiss: () -> Void
     @State private var custom = ""
     @State private var invalid = false
-    @FocusState private var fieldFocused: Bool
+    /// The popover window makes the first preset its initial first responder, which would draw a focus ring on a
+    /// menu opened with the mouse. Rings show once focus moves from there (Tab), like "focus-visible" on the web.
+    @State private var keyboardFocusVisible = false
+    @State private var initialFocusSeen = false
+    @FocusState private var focus: Focus?
+
+    private enum Focus: Hashable { case preset(String), field }
 
     private struct Preset: Identifiable {
         let option: SnoozeOption
@@ -41,6 +47,8 @@ struct SnoozeMenu: View {
                     }
                 }
                 .buttonStyle(MenuItemStyle(selected: option == state.settings.defaultSnooze))
+                .focused($focus, equals: .preset(preset.id))
+                .focusEffectDisabled(!keyboardFocusVisible)
                 .disabled(disabled)
                 .opacity(disabled ? 0.5 : 1)
             }
@@ -51,7 +59,7 @@ struct SnoozeMenu: View {
                     .textFieldStyle(.roundedBorder)
                     .font(Tokens.Typo.menuItem.weight(.bold))
                     .frame(width: 70)
-                    .focused($fieldFocused)
+                    .focused($focus, equals: .field)
                     .onSubmit(setCustom)
                 Text(invalid ? "Try 45m, 4pm, mon" : "or 4pm, mon")
                     .font(Tokens.Typo.menuHint)
@@ -68,6 +76,11 @@ struct SnoozeMenu: View {
         }
         .padding(6)
         .frame(width: 320)
+        .onChange(of: focus) { old, new in
+            guard new != nil else { return }
+            if old == nil, !initialFocusSeen { initialFocusSeen = true; return }
+            keyboardFocusVisible = true
+        }
         .onAppear { custom = state.settings.lastCustomSnoozeText ?? "" }
         .accessibilityLabel("Snooze options")
     }
@@ -81,7 +94,7 @@ struct SnoozeMenu: View {
         let text = custom.trimmingCharacters(in: .whitespaces)
         guard let end = SnoozeParser.parse(text, now: .now, config: state.settings.workHours) else {
             invalid = true
-            fieldFocused = true
+            focus = .field
             return
         }
         invalid = false
