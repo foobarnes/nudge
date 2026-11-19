@@ -91,6 +91,14 @@ public enum SampleRows {
             toNext: 1 * 3600 + 40 * 60)
     }
 
+    /// A two-line title and a branch that wraps: the tallest hover card.
+    public static func longBranch(now: Date, tier: Tier) -> PRRow {
+        row(now: now, id: "PR_g", repo: "acme/web", number: 512,
+            title: "Pause the nightly export while a schema migration runs",
+            author: "carmen", branch: "carmen/pause-nightly-export-during-schema-migrations", waiting: 73_260,
+            work: 5 * 3600 + 21 * 60, tier: tier, toNext: 40 * 60)
+    }
+
     public static func teamWithOthers(now: Date) -> PRRow {
         row(now: now, id: "PR_f", repo: "acme/infra", number: 91, title: "Rotate CI runner credentials",
             author: "carmen", branch: "rotate-runners", waiting: 5400, work: 5400, tier: .fresh, toNext: 4 * 3600 - 5400,
@@ -141,6 +149,28 @@ public enum GalleryViews {
 
     @MainActor public static func row(_ row: PRRow, state: NudgeState, intents: NudgeIntents, revealed: Bool) -> some View {
         PRRowView(row: row, state: state, intents: intents, live: true, isActive: revealed)
+    }
+
+    /// A row whose hover card `cardOpen` opens instead of the pointer, presented as the app presents it (an
+    /// `NSPopover`).
+    @MainActor public static func row(_ row: PRRow, state: NudgeState, intents: NudgeIntents, cardEdge: Edge,
+                                      cardOpen: Bool) -> some View {
+        OpenCardRow(row: row, state: state, intents: intents, cardEdge: cardEdge, open: cardOpen)
+    }
+}
+
+private struct OpenCardRow: View {
+    let row: PRRow
+    let state: NudgeState
+    let intents: NudgeIntents
+    let cardEdge: Edge
+    let open: Bool
+    @State private var cards = HoverCardCoordinator()
+
+    var body: some View {
+        PRRowView(row: row, state: state, intents: intents, live: true, isActive: true, cardEdge: cardEdge)
+            .environment(\.hoverCards, cards)
+            .onChange(of: open, initial: true) { _, open in cards.openID = open ? row.id : nil }
     }
 }
 #endif

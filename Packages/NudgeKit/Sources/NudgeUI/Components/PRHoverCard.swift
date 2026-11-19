@@ -354,8 +354,11 @@ private struct AnchoredPopover<Content: View>: NSViewRepresentable {
         coordinator.wantsShown = isPresented
         if isPresented {
             let popover = coordinator.popover(for: content())
-            guard !popover.isShown else { return }
             DispatchQueue.main.async {
+                // Sized here rather than when the content is set: that happens inside a SwiftUI update, where the
+                // hosting view still measures the previous card. A card that grew while closed (a tier chip
+                // appeared) reopened at its old height, clipped top and bottom.
+                coordinator.fit()
                 guard coordinator.wantsShown, !popover.isShown, let window = view.window,
                       let root = window.contentView else { return }
                 // Anchored to the window's content view with the anchor's converted frame, so the popover never
@@ -392,7 +395,6 @@ private struct AnchoredPopover<Content: View>: NSViewRepresentable {
         func popover(for content: Content) -> NSPopover {
             if let popover = popoverIfLoaded, let host {
                 host.rootView = content
-                popover.contentSize = host.preferredContentSize
                 return popover
             }
             let host = PopoverContentController(rootView: content)
@@ -400,11 +402,18 @@ private struct AnchoredPopover<Content: View>: NSViewRepresentable {
             popover.behavior = .applicationDefined
             popover.animates = true
             popover.contentViewController = host
-            popover.contentSize = host.preferredContentSize
             popover.delegate = self
             self.host = host
             popoverIfLoaded = popover
             return popover
+        }
+
+        /// The popover must know the content's size before it shows: it positions itself for `contentSize` (320×320
+        /// by default) and a later shrink keeps the bottom edge, leaving the popover well below its anchor.
+        func fit() {
+            guard let host, let popover = popoverIfLoaded, let size = host.measure(),
+                  popover.contentSize != size else { return }
+            popover.contentSize = size
         }
 
         nonisolated func popoverDidClose(_ notification: Notification) {
@@ -426,22 +435,19 @@ private final class PopoverContentController<Content: View>: NSViewController {
 
     @available(*, unavailable) required init?(coder: NSCoder) { fatalError() }
 
-    override func loadView() {
-        view = hosting
-        fit()
-    }
+    override func loadView() { view = hosting }
 
     var rootView: Content {
         get { hosting.rootView }
-        set { hosting.rootView = newValue; fit() }
+        set { hosting.rootView = newValue }
     }
 
-    /// The popover must know the content's size before it shows: it positions itself for `contentSize` (320×320 by
-    /// default) and a later shrink keeps the bottom edge, leaving the popover well below its anchor.
-    private func fit() {
+    /// The content's size, or nil before it has one. Only correct outside a SwiftUI update (see `updateNSView`).
+    /// Intrinsic, not `fittingSize`: once shown, `fittingSize` reports the popover's current height.
+    func measure() -> NSSize? {
         hosting.layoutSubtreeIfNeeded()
-        let size = hosting.fittingSize
-        if size.width > 0, size.height > 0 { preferredContentSize = size }
+        let size = hosting.intrinsicContentSize
+        return size.width > 0 && size.height > 0 ? size : nil
     }
 }
 
