@@ -364,7 +364,7 @@ private struct AnchoredPopover<Content: View>: NSViewRepresentable {
                 // Anchored to the window's content view with the anchor's converted frame, so the popover never
                 // tracks SwiftUI's re-layout of the hosted anchor view.
                 let rect = root.convert(view.convert(view.bounds, to: nil), from: nil)
-                popover.show(relativeTo: rect, of: root, preferredEdge: edge)
+                popover.show(relativeTo: rect, of: root, preferredEdge: edge(in: root))
             }
         } else if let popover = coordinator.popoverIfLoaded, popover.isShown {
             popover.close()
@@ -376,11 +376,12 @@ private struct AnchoredPopover<Content: View>: NSViewRepresentable {
         coordinator.popoverIfLoaded?.close()
     }
 
-    /// SwiftUI's `arrowEdge` names the anchor edge the arrow touches; so does `preferredEdge` in an unflipped view.
-    private var edge: NSRectEdge {
+    /// SwiftUI's `arrowEdge` names the anchor edge the arrow touches. `preferredEdge` names an edge in `root`'s
+    /// coordinates, where `minY` is the top in a flipped view: the dropdown's hosting view, not the pill's root.
+    private func edge(in root: NSView) -> NSRectEdge {
         switch arrowEdge {
-        case .top: .maxY
-        case .bottom: .minY
+        case .top: root.isFlipped ? .minY : .maxY
+        case .bottom: root.isFlipped ? .maxY : .minY
         case .leading: .minX
         case .trailing: .maxX
         }
