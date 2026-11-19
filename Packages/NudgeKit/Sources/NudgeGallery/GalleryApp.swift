@@ -9,6 +9,8 @@ import SwiftUI
 // glass can be compared key vs. not key. The morph* scenes toggle the pill every 2.5s in each anchor corner; the
 // clear* scenes review the last request (capsule, or open card) and replay the all-clear every 5s. `newRequest`
 // replays an arrival (jiggle, violet badge) and a reminder every 9s; `pillNew` holds the new-request look.
+// `hoverCardPopover` opens the real popover card on a fresh row, closes it, turns the row amber (one more line of
+// chips) and reopens it, printing "REOPENED": the sequence that used to reopen the card clipped at its old height.
 
 @main
 struct GalleryApp: App {
@@ -29,7 +31,8 @@ enum Scene: String, CaseIterable, Identifiable {
     case pillMixed, pillFresh, pillAmber, pillRed, pillTeam, pillOffHours, pillStale, pillAuthError, pillAllClear,
          pillCheck, pillDimmed, pillLoading, pillExpanded, pillExpandedBottom, pillExpandedSnoozed, pillExpandedNotice
     case dropdown, dropdownSnoozed, dropdownEmpty, dropdownAuthError, dropdownNotice
-    case rowRest, rowHovered, rowHoveredRed, rowHoveredAmber, rowHoveredTeam, hoverCards, workTimePopover, snoozeMenu
+    case rowRest, rowHovered, rowHoveredRed, rowHoveredAmber, rowHoveredTeam, hoverCards, hoverCardPopover,
+         workTimePopover, snoozeMenu
     case settingsGeneral, settingsNotifications, settingsActions, settingsAbout
     case settingsAboutChecking, settingsAboutUpToDate, settingsAboutAvailable, settingsAboutFailed
     case morphTopTrailing, morphTopLeading, morphBottomTrailing, morphBottomLeading
@@ -64,6 +67,7 @@ enum Scene: String, CaseIterable, Identifiable {
         case .dropdown, .dropdownSnoozed, .dropdownEmpty, .dropdownAuthError, .dropdownNotice: CGSize(width: 460, height: 660)
         case .rowRest, .rowHovered, .rowHoveredRed, .rowHoveredAmber, .rowHoveredTeam: CGSize(width: 500, height: 200)
         case .hoverCards: CGSize(width: 460, height: 440)
+        case .hoverCardPopover: CGSize(width: 500, height: 680)
         case .workTimePopover, .snoozeMenu: CGSize(width: 440, height: 360)
         case _ where isSettings: CGSize(width: 1180, height: 820)
         default: CGSize(width: 420, height: 180)
@@ -83,6 +87,8 @@ enum Scene: String, CaseIterable, Identifiable {
 struct GalleryView: View {
     @Binding var scene: Scene
     @State private var state = NudgeState.sample(.mixed)
+    @State private var cardRow = SampleRows.longBranch(now: .now, tier: .fresh)
+    @State private var cardOpen = true
 
     var body: some View {
         ZStack(alignment: .topLeading) {
@@ -102,6 +108,7 @@ struct GalleryView: View {
         .task(id: scene) {
             if scene.isClear { return await replayAllClear() }
             if scene == .newRequest { return await replayNewRequest() }
+            if scene == .hoverCardPopover { return await reopenGrownCard() }
             guard scene.isMorph else { return }
             let slow = ProcessInfo.processInfo.arguments.contains("-slow")
             while !Task.isCancelled {
@@ -127,6 +134,21 @@ struct GalleryView: View {
             try? await Task.sleep(for: .milliseconds(slow ? 20_000 : 3500))
             state.pillExpanded = false
         }
+    }
+
+    private func reopenGrownCard() async {
+        cardRow = SampleRows.longBranch(now: .now, tier: .fresh)
+        cardOpen = true
+        do {
+            try await Task.sleep(for: .milliseconds(1500))
+            cardOpen = false
+            try await Task.sleep(for: .milliseconds(800))
+            cardRow = SampleRows.longBranch(now: .now, tier: .amber)
+            try await Task.sleep(for: .milliseconds(500))
+        } catch { return }
+        cardOpen = true
+        print("REOPENED")
+        fflush(stdout)
     }
 
     /// Two requests wait; a third arrives (printing "NEW", the capture's time zero), a reminder follows 3s later
@@ -176,6 +198,10 @@ struct GalleryView: View {
                 glassCard { GalleryViews.hoverCard(SampleRows.teamWithOthers(now: .now), intents: intents) }
             }
             .padding(24)
+        case .hoverCardPopover:
+            // Centred, so the card fits whichever way the popover opens.
+            glassPanel { GalleryViews.row(cardRow, state: state, intents: intents, cardEdge: .bottom, cardOpen: cardOpen) }
+                .frame(maxHeight: .infinity)
         case .workTimePopover:
             glassCard { GalleryViews.workTimePopover(state: state) }.padding(24)
         case .snoozeMenu:
