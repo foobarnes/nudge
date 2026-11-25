@@ -118,6 +118,16 @@ import Testing
         #expect(loaded.showInDock)
         #expect(loaded.jiggleOnNewRequests)
         #expect(loaded.soundOnNewRequests)
+        #expect(loaded.sortBy == .longestWaiting)
+        #expect(loaded.groupBy == RowGrouping.none)
+    }
+
+    @Test func unknownSortFromANewerBuildFallsBack() {
+        defaults.set(Data(#"{"launchAtLogin":true,"sortBy":"byMood","groupBy":"repository"}"#.utf8), forKey: "settings")
+        let loaded = Store(defaults: defaults).loadSettings()
+        #expect(loaded.launchAtLogin)
+        #expect(loaded.sortBy == .longestWaiting)
+        #expect(loaded.groupBy == .repository)
     }
 
     @Test func noticeFollowsEachSync() {

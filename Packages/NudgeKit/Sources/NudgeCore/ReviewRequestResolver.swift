@@ -68,6 +68,7 @@ enum ReviewRequestResolver {
             author: node.author?.login ?? "ghost", headRef: node.headRefName, via: via,
             otherTeams: teamTargets.filter { $0 != via }, requestedBy: event?.actor,
             requestKey: event?.id ?? "\(node.id)#\(identity(via))#unknown",
-            requestedAt: event?.createdAt, waitingSince: waitingSince)
+            requestedAt: event?.createdAt, waitingSince: waitingSince,
+            diff: node.diff)
     }
 }

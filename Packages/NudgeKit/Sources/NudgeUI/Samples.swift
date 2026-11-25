@@ -68,18 +68,19 @@ public extension NudgeState {
 public enum SampleRows {
     public static func all(now: Date) -> [PRRow] {
         [
-            row(now: now, id: "PR_a", repo: "acme/api", number: 4188, title: "Rate-limit retries for webhooks",
+            row(now: now, id: "PR_a", repo: "acme/api", number: 4188, title: "API-212: Rate-limit retries for webhooks",
                 author: "alice", branch: "retry-webhooks", waiting: 93_852, work: 9 * 3600 + 12 * 60, tier: .red,
-                toNext: nil),
+                toNext: nil, diff: DiffStat(additions: 128, deletions: 42, files: 6)),
             row(now: now, id: "PR_b", repo: "acme/api", number: 4211, title: "Fix token refresh race",
                 author: "bo", branch: "fix-refresh", waiting: 18_190, work: 5 * 3600 + 3 * 60, tier: .amber,
-                toNext: 2 * 3600 + 57 * 60),
+                toNext: 2 * 3600 + 57 * 60, diff: DiffStat(additions: 14, deletions: 3, files: 2)),
             row(now: now, id: "PR_c", repo: "acme/web", number: 930, title: "Export reports to CSV",
                 author: "carmen", branch: "csv-export", waiting: 3803, work: 2 * 3600 + 48 * 60, tier: .fresh,
-                toNext: 1 * 3600 + 12 * 60),
+                toNext: 1 * 3600 + 12 * 60, diff: DiffStat(additions: 412, deletions: 37, files: 11)),
             row(now: now, id: "PR_d", repo: "acme/infra", number: 88, title: "Bump build dependencies",
                 author: "dependabot", branch: "deps", waiting: 1270, work: 1270, tier: .fresh,
-                toNext: 4 * 3600 - 1270, via: .team(org: "acme", slug: "backend")),
+                toNext: 4 * 3600 - 1270, via: .team(org: "acme", slug: "backend"),
+                diff: DiffStat(additions: 6, deletions: 6, files: 1)),
         ]
     }
 
@@ -88,7 +89,7 @@ public enum SampleRows {
         row(now: now, id: "PR_e", repo: "acme/api", number: 4302,
             title: "Migrate the webhook delivery queue to the new retry scheduler and drop the legacy cron fallback",
             author: "alice", branch: "webhook-retry-scheduler", waiting: 41_000, work: 6 * 3600 + 20 * 60, tier: .amber,
-            toNext: 1 * 3600 + 40 * 60)
+            toNext: 1 * 3600 + 40 * 60, diff: DiffStat(additions: 640, deletions: 1_212, files: 23))
     }
 
     /// A two-line title and a branch that wraps: the tallest hover card.
@@ -122,12 +123,13 @@ public enum SampleRows {
 
     private static func row(now: Date, id: String, repo: String, number: Int, title: String, author: String,
                             branch: String, waiting: TimeInterval, work: TimeInterval, tier: Tier,
-                            toNext: TimeInterval?, via: RequestTarget = .direct, otherTeams: [RequestTarget] = []) -> PRRow {
+                            toNext: TimeInterval?, via: RequestTarget = .direct, otherTeams: [RequestTarget] = [],
+                            diff: DiffStat? = nil) -> PRRow {
         let since = now.addingTimeInterval(-waiting)
         let pr = WaitingPR(prID: id, repo: repo, number: number, title: title,
                            url: URL(string: "https://github.com/\(repo)/pull/\(number)")!, author: author,
                            headRef: branch, via: via, otherTeams: otherTeams, requestedBy: author, requestKey: "\(id)#req",
-                           requestedAt: since, waitingSince: since)
+                           requestedAt: since, waitingSince: since, diff: diff)
         return PRRow(pr: pr, level: .notify, tier: tier, workSeconds: work, workSecondsToNextTier: toNext,
                      snoozedUntil: nil, computedAt: now)
     }

@@ -20,6 +20,12 @@ struct PRHoverCard: View {
             VStack(alignment: .leading, spacing: 6) {
                 repoLine
                 branchLine
+                if let diff = row.pr.diff {
+                    HStack(spacing: 8) {
+                        Label("\(diff.filesLabel) changed", systemImage: "doc").labelStyle(MiniLabelStyle())
+                        DiffStatView(diff: diff)
+                    }
+                }
             }
             .font(Tokens.Typo.rowSubtitle)
             .foregroundStyle(Tokens.Palette.secondary)
@@ -59,6 +65,7 @@ struct PRHoverCard: View {
 
     private var repoLine: some View {
         HStack(spacing: 6) {
+            Avatar(login: row.pr.owner, size: 16)
             Text(verbatim: "\(row.pr.repo) #\(row.pr.number)").fontWeight(.semibold)
             Text("·")
             Text("by \(row.pr.author)")
@@ -121,7 +128,7 @@ struct PRHoverCard: View {
             chips.append(ChipSpec(symbol: "bell.slash.fill", text: "Silent", fill: Tokens.Palette.fill, color: Tokens.Palette.secondary))
         }
         if row.tier != .fresh {
-            chips.append(ChipSpec(symbol: "circle.fill", text: row.tier == .amber ? "Amber" : "Red",
+            chips.append(ChipSpec(symbol: "circle.fill", text: row.tier.title,
                                   fill: Tokens.Tier.chipFill(row.tier), color: Tokens.Tier.text(row.tier)))
         }
         return chips

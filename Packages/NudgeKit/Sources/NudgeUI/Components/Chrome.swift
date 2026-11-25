@@ -90,6 +90,8 @@ struct Chip: View {
     let text: String
     var fill: Color = Tokens.Palette.fill
     var color: Color = Tokens.Palette.secondary
+    /// Off: bare icon and text, no padding (the row's work time).
+    var inset = true
 
     var body: some View {
         HStack(spacing: 5) {
@@ -97,8 +99,8 @@ struct Chip: View {
             Text(text).font(Tokens.Typo.chip).monospacedDigit()
         }
         .foregroundStyle(color)
-        .padding(.horizontal, 8)
-        .padding(.vertical, 3)
+        .padding(.horizontal, inset ? 8 : 0)
+        .padding(.vertical, inset ? 3 : 0)
         .background(fill, in: RoundedRectangle(cornerRadius: Tokens.Radius.chip, style: .continuous))
         .fixedSize()
     }
@@ -107,10 +109,13 @@ struct Chip: View {
 struct WorkChip: View {
     let seconds: TimeInterval?
     let tier: Tier
+    /// Text in the tier color with no fill, for the row's second line.
+    var plain = false
 
     var body: some View {
         Chip(symbol: "briefcase.fill", text: "\(DurationFormat.compact(seconds ?? 0)) work",
-             fill: Tokens.Tier.chipFill(tier), color: tier == .fresh ? Tokens.Palette.secondary : Tokens.Tier.text(tier))
+             fill: plain ? .clear : Tokens.Tier.chipFill(tier),
+             color: tier == .fresh ? Tokens.Palette.secondary : Tokens.Tier.text(tier), inset: !plain)
             .accessibilityLabel("\(Format.spoken(seconds ?? 0)) of work time")
     }
 }
@@ -276,7 +281,64 @@ extension PRRow {
             label += ", waiting \(Format.spoken(Date.now.timeIntervalSince(since)))"
         }
         if case let .team(_, slug) = pr.via { label += ", team \(slug)" }
+        if let diff = pr.diff { label += ", \(diff.spoken)" }
         return label
+    }
+
+    var titleParts: (key: String?, rest: String) { Self.titleParts(pr.title) }
+
+    /// A leading Linear or Jira style key, split from the rest so the row can mute it: `ABC-123: Title` or
+    /// `[ABC-123] Title`. The colon or brackets are required, so a title like "UTF-8 decoding" keeps its first word.
+    /// Any other title (no key, a key elsewhere, another format) comes back whole.
+    static func titleParts(_ title: String) -> (key: String?, rest: String) {
+        guard let match = title.prefixMatch(of: /(?:\[([A-Z][A-Z0-9]*-[0-9]+)\]|([A-Z][A-Z0-9]*-[0-9]+):)\s+/),
+              let key = match.1 ?? match.2 else { return (nil, title) }
+        let rest = title[match.range.upperBound...]
+        return rest.isEmpty ? (nil, title) : (String(key), String(rest))
+    }
+}
+
+extension DiffStat {
+    /// "6 files" / "1 file".
+    var filesLabel: String { "\(files) file\(files == 1 ? "" : "s")" }
+
+    var spoken: String { "\(filesLabel), \(additions) added, \(deletions) removed" }
+
+    /// GitHub's five squares: green for added, red for removed, grey for the rounding remainder.
+    var blocks: (added: Int, removed: Int) {
+        guard lines > 0 else { return (0, 0) }
+        let added = Int((Double(additions) / Double(lines) * 5).rounded())
+        return (added, min(5 - added, Int((Double(deletions) / Double(lines) * 5).rounded())))
+    }
+}
+
+/// `+128 −42` and the five-square ratio bar.
+struct DiffStatView: View {
+    let diff: DiffStat
+    var showsBar = true
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Text(verbatim: "+\(diff.additions)").foregroundStyle(Tokens.Palette.added)
+            Text(verbatim: "−\(diff.deletions)").foregroundStyle(Tokens.Palette.removed)
+            if showsBar {
+                let blocks = diff.blocks
+                HStack(spacing: 1.5) {
+                    ForEach(0..<5, id: \.self) { i in
+                        RoundedRectangle(cornerRadius: 1.5, style: .continuous)
+                            .fill(i < blocks.added ? Tokens.Palette.added
+                                  : i < blocks.added + blocks.removed ? Tokens.Palette.removed : Tokens.Palette.fillStrong)
+                            .frame(width: 6, height: 6)
+                    }
+                }
+                .padding(.leading, 2)
+            }
+        }
+        .fontWeight(.bold)
+        .monospacedDigit()
+        .fixedSize()
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(diff.additions) added, \(diff.deletions) removed")
     }
 }
 

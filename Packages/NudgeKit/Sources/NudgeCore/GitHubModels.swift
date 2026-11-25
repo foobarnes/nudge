@@ -83,10 +83,19 @@ struct PRNode: Decodable, Sendable {
     let url: URL
     let isDraft: Bool
     let headRefName: String
+    /// Optional so a response or fixture without them still decodes; the row then shows no diff stats.
+    let additions: Int?
+    let deletions: Int?
+    let changedFiles: Int?
     let author: Author?
     let repository: Repository
     var reviewRequests: ReviewRequests
     let timelineItems: Timeline
+
+    var diff: DiffStat? {
+        guard let additions, let deletions, let changedFiles else { return nil }
+        return DiffStat(additions: additions, deletions: deletions, files: changedFiles)
+    }
 }
 
 /// One search result: a pull request, an issue (an empty object under `... on PullRequest`), or a node that
