@@ -236,10 +236,13 @@ extension EnvironmentValues {
 }
 
 /// Hover intent: ~450ms over the title or subtitle opens, ~900ms anywhere else on the row (never over the action
-/// buttons), instant when another card is already open, ~200ms after leaving both row and card closes.
+/// buttons). Leaving both row and card closes after a 300ms grace (Radix HoverCard's default), long enough to cross
+/// the arrow gap. Another row takes over an open card only once that grace has run out, so crossing a neighbor on the
+/// way to the card doesn't steal it.
 struct HoverCardPresenter: ViewModifier {
     static let textDelay: Duration = .milliseconds(450)
     static let rowDelay: Duration = .milliseconds(900)
+    static let closeGrace: Duration = .milliseconds(300)
 
     let row: PRRow
     let intents: NudgeIntents
@@ -284,15 +287,14 @@ struct HoverCardPresenter: ViewModifier {
             .accessibilityAction(named: "Show details") { cards.toggle(row.id) }
     }
 
-    /// Opens after `delay`, unless an earlier deadline is already pending. Switches instantly between open cards.
+    /// Opens after `delay`, unless an earlier deadline is already pending. With another row's card open, waits out
+    /// that card's close grace instead: if the pointer was only passing through on its way there, leaving this row
+    /// disarms it first.
     private func arm(after delay: Duration) {
         guard !cards.suppressed, !actionsHovered else { return }
         closeTask?.cancel()
-        if let open = cards.openID, open != row.id {
-            cards.openID = row.id
-            return
-        }
-        let target = ContinuousClock.now + delay
+        let switching = cards.openID.map { $0 != row.id } ?? false
+        let target = ContinuousClock.now + (switching ? Self.closeGrace : delay)
         if let deadline, deadline <= target { return }
         openTask?.cancel()
         deadline = target
@@ -313,7 +315,7 @@ struct HoverCardPresenter: ViewModifier {
     private func scheduleClose() {
         closeTask?.cancel()
         closeTask = Task {
-            try? await Task.sleep(for: .milliseconds(200))
+            try? await Task.sleep(for: Self.closeGrace)
             guard !Task.isCancelled, !cardHovered, !rowHovered else { return }
             cards.close(row.id)
         }
