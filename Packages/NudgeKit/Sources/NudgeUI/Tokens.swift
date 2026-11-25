@@ -22,6 +22,9 @@ enum Tokens {
         static let accentGlyph = dynamic(light: 0x7457FF, dark: 0x8F7BFF)
         static let check = Color(hex: 0x1F9D55)
         static let warning = dynamic(light: 0xA84D07, dark: 0xFFB35C)
+        /// Diff stats: lines added and removed.
+        static let added = dynamic(light: 0x1A7F37, dark: 0x6FDC8C)
+        static let removed = dynamic(light: 0xC4302B, dark: 0xFF7B72)
         /// Sits between the glass and the pill's content: lifts light glass a little, darkens dark glass so the
         /// tier colors hold contrast on any wallpaper.
         static let glassScrim = dynamic(light: .white, 0.16, dark: .black, 0.30)
@@ -95,6 +98,7 @@ enum Tokens {
         static let pillTimer = Font.system(size: 21, weight: .heavy, design: .rounded)
         static let pillLabel = Font.system(size: 14, weight: .bold, design: .rounded)
         static let rowTitle = Font.system(size: 15, weight: .bold, design: .rounded)
+        static let rowNumber = Font.system(size: 15, weight: .heavy, design: .rounded)
         static let rowSubtitle = Font.system(size: 12, weight: .medium, design: .rounded)
         static let rowTimer = Font.system(size: 18, weight: .heavy, design: .rounded)
         static let heading = Font.system(size: 15, weight: .bold, design: .rounded)

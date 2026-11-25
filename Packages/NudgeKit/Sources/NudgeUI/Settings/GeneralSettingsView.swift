@@ -20,7 +20,7 @@ struct GeneralSettingsView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                SettingsHeader(title: "General", subtitle: "Where timers show, when the work clock runs, and how urgency escalates.")
+                SettingsHeader(title: "General", subtitle: "Where timers show, how the list is ordered, when the work clock runs, and how urgency escalates.")
 
                 SettingsCard {
                     SettingsRow(title: "Show timers", note: settings.displayMode.hint) {
@@ -42,6 +42,20 @@ struct GeneralSettingsView: View {
                     SettingsRow(title: "Show Nudge in the Dock", note: "Only while Settings is open. Off keeps Nudge in the menu bar alone.") {
                         Toggle("Show Nudge in the Dock", isOn: intents.setting(\.showInDock, from: state))
                             .labelsHidden().toggleStyle(SettingsSwitchStyle())
+                    }
+                }
+
+                SettingsCard {
+                    SettingsRow(title: "Sort by", note: "Order of the request list. The menu bar and widget timers always show the longest wait.") {
+                        SettingsMenu(title: "Sort by", selection: intents.setting(\.sortBy, from: state),
+                                     options: RowSort.allCases.map { ($0, $0.title) })
+                        .frame(width: Self.menuWidth)
+                    }
+                    Divider().overlay(.white.opacity(0.07))
+                    SettingsRow(title: "Group by", note: "Groups follow the sort: the group holding the first request comes first.") {
+                        SettingsMenu(title: "Group by", selection: intents.setting(\.groupBy, from: state),
+                                     options: RowGrouping.allCases.map { ($0, $0.title) })
+                        .frame(width: Self.menuWidth)
                     }
                 }
 
@@ -164,6 +178,33 @@ struct GeneralSettingsView: View {
 
     private static func hours(_ value: Double) -> String {
         value == value.rounded() ? String(Int(value)) : String(value)
+    }
+}
+
+extension RowSort {
+    var title: String {
+        switch self {
+        case .longestWaiting: "Longest waiting"
+        case .newest: "Newest request"
+        case .smallestDiff: "Smallest diff first"
+        case .largestDiff: "Largest diff first"
+        case .fewestFiles: "Fewest files first"
+        case .mostFiles: "Most files first"
+        case .repository: "Repository, A to Z"
+        }
+    }
+}
+
+extension RowGrouping {
+    var title: String {
+        switch self {
+        case .none: "None"
+        case .repository: "Repository"
+        case .owner: "Owner"
+        case .urgency: "Urgency"
+        case .size: "Diff size"
+        case .author: "Author"
+        }
     }
 }
 

@@ -24,7 +24,7 @@ public struct DropdownView: View {
         VStack(spacing: 2) {
             header
             if state.rows.isEmpty { emptyState } else {
-                RowList(state: state, intents: intents, live: true, activeID: activeIndex.map { state.rows[$0].id })
+                RowList(state: state, intents: intents, live: true, activeID: activeRow?.id)
             }
             if !state.snoozedRows.isEmpty { snoozed }
             NoticeLine(notice: state.notice)
@@ -57,19 +57,22 @@ public struct DropdownView: View {
             return .handled
         }
         .environment(\.hoverCards, cards)
-        .onChange(of: state.rows.map(\.id)) { _, ids in
+        .onChange(of: state.orderedRows.map(\.id)) { _, ids in
             if let i = activeIndex, i >= ids.count { activeIndex = ids.isEmpty ? nil : ids.count - 1 }
         }
     }
 
+    /// Arrow keys walk the list as shown, so they follow Sort by and Group by.
     private var activeRow: PRRow? {
-        activeIndex.flatMap { state.rows.indices.contains($0) ? state.rows[$0] : nil }
+        let rows = state.orderedRows
+        return activeIndex.flatMap { rows.indices.contains($0) ? rows[$0] : nil }
     }
 
     private func move(_ delta: Int) -> KeyPress.Result {
-        guard !state.rows.isEmpty else { return .ignored }
-        let next = (activeIndex ?? (delta > 0 ? -1 : state.rows.count)) + delta
-        activeIndex = min(max(next, 0), state.rows.count - 1)
+        let count = state.rows.count
+        guard count > 0 else { return .ignored }
+        let next = (activeIndex ?? (delta > 0 ? -1 : count)) + delta
+        activeIndex = min(max(next, 0), count - 1)
         return .handled
     }
 

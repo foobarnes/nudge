@@ -461,20 +461,30 @@ struct RowList: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
+        let groups = state.groups
+        let order = Dictionary(uniqueKeysWithValues: groups.flatMap(\.rows).enumerated().map { ($1.id, $0) })
         ScrollView {
             VStack(spacing: 2) {
-                ForEach(Array(state.rows.enumerated()), id: \.element.id) { index, row in
-                    PRRowView(row: row, state: state, intents: intents, live: live, isActive: row.id == activeID, cardEdge: cardEdge)
-                        .id(row.id)
-                        .opacity(reveal?.shown == false ? 0 : 1)
-                        .offset(y: rowOffset)
-                        .animation(reveal.map { $0.animation(index, $0.shown) }, value: reveal?.shown)
-                        .transition(.asymmetric(
-                            insertion: .move(edge: .leading).combined(with: .opacity),
-                            removal: .move(edge: .trailing).combined(with: .opacity)))
+                ForEach(groups) { group in
+                    if group.key != .all {
+                        RowGroupHeader(group: group)
+                            .opacity(reveal?.shown == false ? 0 : 1)
+                            .transition(.opacity)
+                    }
+                    ForEach(group.rows) { row in
+                        let index = order[row.id] ?? 0
+                        PRRowView(row: row, state: state, intents: intents, live: live, isActive: row.id == activeID, cardEdge: cardEdge)
+                            .id(row.id)
+                            .opacity(reveal?.shown == false ? 0 : 1)
+                            .offset(y: rowOffset)
+                            .animation(reveal.map { $0.animation(index, $0.shown) }, value: reveal?.shown)
+                            .transition(.asymmetric(
+                                insertion: .move(edge: .leading).combined(with: .opacity),
+                                removal: .move(edge: .trailing).combined(with: .opacity)))
+                    }
                 }
             }
-            .motion(Motion.rowSlide, value: state.rows.map(\.id))
+            .motion(Motion.rowSlide, value: groups.flatMap(\.rows).map(\.id))
         }
         .scrollIndicators(.automatic)
         .scrollBounceBehavior(.basedOnSize)

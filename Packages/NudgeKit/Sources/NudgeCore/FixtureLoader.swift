@@ -14,6 +14,9 @@ enum FixtureLoader {
         var otherTeams: [String]?
         var requestedBy: String?
         var secondsAgo: TimeInterval?
+        var additions: Int?
+        var deletions: Int?
+        var files: Int?
     }
 
     static func load(_ url: URL, now: Date = Date()) throws -> [WaitingPR] {
@@ -29,7 +32,8 @@ enum FixtureLoader {
             url: URL(string: "https://github.com/\(e.repo)/pull/\(e.number)")!, author: e.author,
             headRef: e.headRef ?? "main", via: via, otherTeams: (e.otherTeams ?? []).map(target),
             requestedBy: e.requestedBy, requestKey: since == nil ? "\(id)#\(e.via ?? "direct")#unknown" : "RRE_\(id)",
-            requestedAt: since, waitingSince: since)
+            requestedAt: since, waitingSince: since,
+            diff: e.files.map { DiffStat(additions: e.additions ?? 0, deletions: e.deletions ?? 0, files: $0) })
     }
 
     private static func target(_ text: String?) -> RequestTarget {

@@ -32,6 +32,14 @@ import Testing
         #expect(pr.requestedAt == iso("2026-01-05T10:00:00Z"))
     }
 
+    @Test func diffStats() throws {
+        let events = [requested("RRE_a", "2026-01-05T10:00:00Z", user("octocat"))]
+        let pr = try #require(try resolve(prJSON(reviewers: [user("octocat")], events: events, diff: (128, 42, 6))))
+        #expect(pr.diff == DiffStat(additions: 128, deletions: 42, files: 6))
+        let bare = try #require(try resolve(prJSON(reviewers: [user("octocat")], events: events)))
+        #expect(bare.diff == nil)
+    }
+
     @Test func draftExcluded() throws {
         #expect(try resolve(prJSON(draft: true, reviewers: [user("octocat")], events: [
             requested("RRE_a", "2026-01-05T10:00:00Z", user("octocat")),

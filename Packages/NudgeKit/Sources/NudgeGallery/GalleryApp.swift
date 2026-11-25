@@ -30,7 +30,7 @@ struct GalleryApp: App {
 enum Scene: String, CaseIterable, Identifiable {
     case pillMixed, pillFresh, pillAmber, pillRed, pillTeam, pillOffHours, pillStale, pillAuthError, pillAllClear,
          pillCheck, pillDimmed, pillLoading, pillExpanded, pillExpandedBottom, pillExpandedSnoozed, pillExpandedNotice
-    case dropdown, dropdownSnoozed, dropdownEmpty, dropdownAuthError, dropdownNotice
+    case dropdown, dropdownSnoozed, dropdownEmpty, dropdownAuthError, dropdownNotice, dropdownGrouped
     case rowRest, rowHovered, rowHoveredRed, rowHoveredAmber, rowHoveredTeam, hoverCards, hoverCardPopover,
          workTimePopover, snoozeMenu
     case settingsGeneral, settingsNotifications, settingsActions, settingsAbout
@@ -64,7 +64,8 @@ enum Scene: String, CaseIterable, Identifiable {
         case .pillExpanded, .pillExpandedBottom, .pillExpandedSnoozed, .pillExpandedNotice,
              .morphTopTrailing, .morphTopLeading, .morphBottomTrailing, .morphBottomLeading,
              .clearCollapsed, .clearExpanded, .clearCheck: CGSize(width: 520, height: 540)
-        case .dropdown, .dropdownSnoozed, .dropdownEmpty, .dropdownAuthError, .dropdownNotice: CGSize(width: 460, height: 660)
+        case .dropdown, .dropdownSnoozed, .dropdownEmpty, .dropdownAuthError, .dropdownNotice, .dropdownGrouped:
+            CGSize(width: 460, height: 660)
         case .rowRest, .rowHovered, .rowHoveredRed, .rowHoveredAmber, .rowHoveredTeam: CGSize(width: 500, height: 200)
         case .hoverCards: CGSize(width: 460, height: 440)
         case .hoverCardPopover: CGSize(width: 500, height: 680)
@@ -183,7 +184,7 @@ struct GalleryView: View {
         case .morphTopTrailing, .morphTopLeading, .morphBottomTrailing, .morphBottomLeading,
              .clearCollapsed, .clearExpanded, .clearCheck, .newRequest, .pillNew:
             pill
-        case .dropdown, .dropdownSnoozed, .dropdownEmpty, .dropdownAuthError, .dropdownNotice:
+        case .dropdown, .dropdownSnoozed, .dropdownEmpty, .dropdownAuthError, .dropdownNotice, .dropdownGrouped:
             DropdownView(state: state, intents: intents).padding(8)
         case .rowRest, .rowHovered, .rowHoveredRed, .rowHoveredAmber, .rowHoveredTeam:
             // Hovered row: red (0), amber (1) or team (3); another row rests below it.
@@ -299,6 +300,9 @@ struct GalleryView: View {
         case .dropdownSnoozed: s = .sample(.snoozed)
         case .dropdownEmpty: s = .sample(.empty)
         case .dropdownNotice: s = .sample(.notice)
+        case .dropdownGrouped:
+            s = .sample(.mixed)
+            s.settings.groupBy = .repository
         case .settingsAboutChecking, .settingsAboutUpToDate, .settingsAboutAvailable, .settingsAboutFailed:
             s = .sample(.mixed)
             s.updates?.phase = switch scene {

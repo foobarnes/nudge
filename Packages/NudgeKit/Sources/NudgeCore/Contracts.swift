@@ -74,18 +74,32 @@ public struct WaitingPR: Identifiable, Hashable, Sendable {
     public let requestKey: String
     public let requestedAt: Date?
     public let waitingSince: Date?
+    /// nil when GitHub didn't report it (fixtures, older responses).
+    public let diff: DiffStat?
 
     public init(prID: String, repo: String, number: Int, title: String, url: URL, author: String, headRef: String,
                 via: RequestTarget, otherTeams: [RequestTarget] = [], requestedBy: String?, requestKey: String,
-                requestedAt: Date?, waitingSince: Date?) {
+                requestedAt: Date?, waitingSince: Date?, diff: DiffStat? = nil) {
         self.prID = prID; self.repo = repo; self.number = number; self.title = title; self.url = url
         self.author = author; self.headRef = headRef; self.via = via; self.otherTeams = otherTeams
         self.requestedBy = requestedBy; self.requestKey = requestKey; self.requestedAt = requestedAt
-        self.waitingSince = waitingSince
+        self.waitingSince = waitingSince; self.diff = diff
     }
 
     public var owner: String { String(repo.split(separator: "/").first ?? "") }
     public var name: String { String(repo.split(separator: "/").last ?? "") }
+}
+
+/// Lines and files a pull request changes.
+public struct DiffStat: Hashable, Sendable {
+    public let additions: Int
+    public let deletions: Int
+    public let files: Int
+    public init(additions: Int, deletions: Int, files: Int) {
+        self.additions = additions; self.deletions = deletions; self.files = files
+    }
+
+    public var lines: Int { additions + deletions }
 }
 
 public struct SyncSnapshot: Sendable {
@@ -161,6 +175,8 @@ public struct NudgeSettings: Codable, Hashable, Sendable {
     public var repoRules: [String: NotifyLevel] = [:]
     public var actions: [ReviewAction] = [.viewDiff]
     public var allowedURLSchemes: [String] = []
+    public var sortBy: RowSort = .longestWaiting
+    public var groupBy: RowGrouping = .none
     public init() {}
 
     /// Missing keys take their defaults, so settings saved before a field existed still load.
@@ -184,6 +200,9 @@ public struct NudgeSettings: Codable, Hashable, Sendable {
         repoRules = try value(.repoRules, d.repoRules)
         actions = try value(.actions, d.actions)
         allowedURLSchemes = try value(.allowedURLSchemes, d.allowedURLSchemes)
+        // A choice this build doesn't know (saved by a newer one) falls back instead of failing the whole load.
+        sortBy = (try? c.decodeIfPresent(RowSort.self, forKey: .sortBy)) ?? d.sortBy
+        groupBy = (try? c.decodeIfPresent(RowGrouping.self, forKey: .groupBy)) ?? d.groupBy
     }
 }
 
@@ -281,6 +300,9 @@ public final class NudgeState {
     public init() {}
 
     public var oldest: PRRow? { rows.first }
+    /// `rows` in the list's order, under Settings' Sort by and Group by.
+    public var groups: [RowGroup] { RowArrangement.arrange(rows, sort: settings.sortBy, group: settings.groupBy) }
+    public var orderedRows: [PRRow] { groups.flatMap(\.rows) }
     public var hasNewRows: Bool { !newRowIDs.isEmpty && rows.contains { newRowIDs.contains($0.id) } }
 
     /// The user has looked at the requests (opened the card or the dropdown).
