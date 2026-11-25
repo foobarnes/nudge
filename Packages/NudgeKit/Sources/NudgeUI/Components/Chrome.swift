@@ -285,10 +285,16 @@ extension PRRow {
         return label
     }
 
-    /// A leading tracker key ("RLM-4892: Keep filters") split from the rest, so the row can dim it.
-    var titleParts: (key: String?, rest: String) {
-        guard let match = pr.title.prefixMatch(of: /([A-Z][A-Z0-9]*-[0-9]+):?\s+/) else { return (nil, pr.title) }
-        return (String(match.1), String(pr.title[match.range.upperBound...]))
+    var titleParts: (key: String?, rest: String) { Self.titleParts(pr.title) }
+
+    /// A leading Linear or Jira style key, split from the rest so the row can mute it: `ABC-123: Title` or
+    /// `[ABC-123] Title`. The colon or brackets are required, so a title like "UTF-8 decoding" keeps its first word.
+    /// Any other title (no key, a key elsewhere, another format) comes back whole.
+    static func titleParts(_ title: String) -> (key: String?, rest: String) {
+        guard let match = title.prefixMatch(of: /(?:\[([A-Z][A-Z0-9]*-[0-9]+)\]|([A-Z][A-Z0-9]*-[0-9]+):)\s+/),
+              let key = match.1 ?? match.2 else { return (nil, title) }
+        let rest = title[match.range.upperBound...]
+        return rest.isEmpty ? (nil, title) : (String(key), String(rest))
     }
 }
 

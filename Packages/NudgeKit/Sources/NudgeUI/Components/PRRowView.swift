@@ -86,11 +86,12 @@ struct PRRowView: View {
         .padding(.vertical, Tokens.Space.rowV)
     }
 
-    /// The tracker key, if the title starts with one, in tertiary grey before the rest.
+    /// The tracker key, if the title starts with one, muted before the rest: secondary grey at medium weight, the
+    /// subtitle's color, so it stays as legible as line 2 on the hover fill (tertiary grey fell under 3:1 there).
     private var title: Text {
         let parts = row.titleParts
         guard let key = parts.key else { return Text(verbatim: parts.rest) }
-        let dimmed = Text(verbatim: "\(key) ").foregroundStyle(Tokens.Palette.tertiary).fontWeight(.semibold)
+        let dimmed = Text(verbatim: "\(key) ").foregroundStyle(Tokens.Palette.secondary).fontWeight(.medium)
         return Text("\(dimmed)\(parts.rest)")
     }
 
