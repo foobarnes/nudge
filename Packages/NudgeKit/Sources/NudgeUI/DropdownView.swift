@@ -94,12 +94,7 @@ public struct DropdownView: View {
                 .font(Tokens.Typo.caption).foregroundStyle(Tokens.Palette.secondary)
             }
             Spacer()
-            // Same header controls as the pill's card, plus Quit (the pill has no Quit of its own).
-            IconButton(symbol: "arrow.clockwise", label: "Sync now", role: .secondary) { intents.syncNow() }
-            IconButton(symbol: "gearshape", label: "Settings", role: .secondary, shortcut: "⌘,") { intents.openSettings() }
-                .keyboardShortcut(",", modifiers: .command)
-            IconButton(symbol: "power", label: "Quit Nudge", role: .secondary, shortcut: "⌘Q") { intents.quit() }
-                .keyboardShortcut("q", modifiers: .command)
+            HeaderButtons(intents: intents, includesQuit: true)
         }
         .padding(.leading, 10).padding(.trailing, 4).padding(.top, 4).padding(.bottom, 6)
         .contentShape(Rectangle())
