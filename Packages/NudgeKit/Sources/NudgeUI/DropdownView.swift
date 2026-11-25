@@ -1,7 +1,7 @@
 import NudgeCore
 import SwiftUI
 
-/// The status-item panel: header, rows, snoozed group, display mode, Settings and Quit.
+/// The status-item panel: header (Sync, Settings, Quit), rows, snoozed group, display mode.
 public struct DropdownView: View {
     private let state: NudgeState
     private let intents: NudgeIntents
@@ -29,7 +29,6 @@ public struct DropdownView: View {
             if !state.snoozedRows.isEmpty { snoozed }
             NoticeLine(notice: state.notice)
             displayModeSection
-            menuItems
         }
         .padding(8)
         .frame(width: Tokens.Size.panelWidth)
@@ -76,7 +75,7 @@ public struct DropdownView: View {
     // MARK: Sections
 
     private var header: some View {
-        HStack(alignment: .center, spacing: 10) {
+        HStack(alignment: .center, spacing: 8) {
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
                     if isAllClear {
@@ -95,8 +94,12 @@ public struct DropdownView: View {
                 .font(Tokens.Typo.caption).foregroundStyle(Tokens.Palette.secondary)
             }
             Spacer()
-            IconButton(symbol: "arrow.clockwise", label: "Sync now") { intents.syncNow() }
-                .help("Sync now")
+            // Same header controls as the pill's card, plus Quit (the pill has no Quit of its own).
+            IconButton(symbol: "arrow.clockwise", label: "Sync now", role: .secondary) { intents.syncNow() }
+            IconButton(symbol: "gearshape", label: "Settings", role: .secondary, shortcut: "⌘,") { intents.openSettings() }
+                .keyboardShortcut(",", modifiers: .command)
+            IconButton(symbol: "power", label: "Quit Nudge", role: .secondary, shortcut: "⌘Q") { intents.quit() }
+                .keyboardShortcut("q", modifiers: .command)
         }
         .padding(.leading, 10).padding(.trailing, 4).padding(.top, 4).padding(.bottom, 6)
         .contentShape(Rectangle())
@@ -181,15 +184,6 @@ public struct DropdownView: View {
         }
     }
 
-    private var menuItems: some View {
-        VStack(spacing: 0) {
-            MenuDivider()
-            MenuRow(symbol: "gearshape", title: "Settings…", shortcut: "⌘,") { intents.openSettings() }
-                .keyboardShortcut(",", modifiers: .command)
-            MenuRow(symbol: "power", title: "Quit Nudge", shortcut: "⌘Q") { intents.quit() }
-                .keyboardShortcut("q", modifiers: .command)
-        }
-    }
 }
 
 private struct SnoozedRowView: View {
@@ -214,7 +208,7 @@ private struct SnoozedRowView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .contentShape(Rectangle())
                 .onHover { textHovered = $0 }
-                IconButton(symbol: "moon.slash", label: "Unsnooze") { cards.rowClicked(); intents.unsnooze(row) }
+                IconButton(symbol: "sun.max", label: "Unsnooze") { cards.rowClicked(); intents.unsnooze(row) }
                     .onHover { actionsHovered = $0 }
                     .popover(isPresented: $showSnooze, arrowEdge: .bottom) {
                         SnoozeMenu(row: row, state: state, intents: intents) { showSnooze = false }
@@ -236,26 +230,6 @@ private struct SnoozedRowView: View {
         .accessibilityElement(children: .contain)
         .accessibilityLabel(row.accessibilityLabel)
         .accessibilityHint("Opens the pull request")
-    }
-}
-
-private struct MenuRow: View {
-    let symbol: String
-    let title: String
-    let shortcut: String
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: 8) {
-                MenuIcon(symbol: symbol)
-                Text(title)
-                Spacer()
-                Text(shortcut).font(Tokens.Typo.rowSubtitle).foregroundStyle(Tokens.Palette.tertiary)
-            }
-        }
-        .buttonStyle(MenuItemStyle())
-        .frame(height: 28)
     }
 }
 

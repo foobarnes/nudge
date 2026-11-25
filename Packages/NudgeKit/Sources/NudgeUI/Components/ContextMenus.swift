@@ -36,7 +36,7 @@ struct RowContextMenu: View {
             Label("Snooze", systemImage: "moon.zzz")
         }
         if isSnoozed {
-            Button { intents.unsnooze(row) } label: { Label("Unsnooze", systemImage: "moon.slash") }
+            Button { intents.unsnooze(row) } label: { Label("Unsnooze", systemImage: "sun.max") }
         }
         Button { intents.hide(row) } label: { Label("Hide Until Re-requested", systemImage: "eye.slash") }
         Divider()

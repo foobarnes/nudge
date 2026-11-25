@@ -165,6 +165,7 @@ struct CopyIconButton: View {
         }
         .buttonStyle(CopyIconButtonStyle())
         .focusable(false)
+        .tooltip(copied ? "Copied" : label)
         .animation(Motion.crossfade, value: copied)
         .accessibilityLabel(copied ? "Copied" : label)
     }

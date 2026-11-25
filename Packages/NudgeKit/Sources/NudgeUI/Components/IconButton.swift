@@ -1,8 +1,8 @@
 import SwiftUI
 
-// 28pt icon buttons for row actions and panel headers. While the pointer is over one, the row shows the button's
-// name in place of its subtitle (`ActionLabel`), so nothing ever floats over a control; system tooltips don't show
-// for inactive apps anyway.
+// 28pt icon buttons for row actions and panel headers. Each one names itself in a `tooltip` after a short hover
+// (system tooltips don't show for inactive apps); inside a row, the row also shows the name in place of its subtitle
+// (`ActionLabel`).
 //
 // Every control here is `.focusable(false)`: the pill panel never takes keyboard focus, and with Full Keyboard
 // Access on, SwiftUI's key-view-loop rebuild for a list of focusable buttons in that panel never returned
@@ -85,12 +85,15 @@ struct IconButton: View {
     let label: String
     var role: IconRole = .normal
     var side: SplitSide = .whole
+    /// Shown dimmer after the label in the tooltip, e.g. "⌘,".
+    var shortcut: String? = nil
     let action: () -> Void
 
     var body: some View {
         Button(action: action) { Image(systemName: symbol) }
             .buttonStyle(IconButtonStyle(role: role, side: side))
             .focusable(false)
+            .tooltip(label, shortcut: shortcut)
             .actionLabel(label)
             .accessibilityLabel(label)
     }
@@ -115,6 +118,7 @@ struct SplitIconMenuButton<MenuContent: View>: View {
                 .menuIndicator(.hidden)
                 .focusable(false)
                 .fixedSize()
+                .tooltip(menuLabel)
                 .actionLabel(menuLabel)
                 .accessibilityLabel(menuLabel)
         }
@@ -138,6 +142,7 @@ struct SplitIconPopoverButton<Popover: View>: View {
             Button { isPresented.toggle() } label: { Image(systemName: "chevron.down") }
                 .buttonStyle(IconButtonStyle(role: role, side: .trailing))
                 .focusable(false)
+                .tooltip(menuLabel)
                 .actionLabel(menuLabel)
                 .accessibilityLabel(menuLabel)
                 .popover(isPresented: $isPresented, arrowEdge: .bottom) { popover }
