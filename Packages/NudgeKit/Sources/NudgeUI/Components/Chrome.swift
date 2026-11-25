@@ -169,6 +169,25 @@ struct SyncedLabel: View {
     }
 }
 
+/// The icon buttons at the top right of the pill's card and the dropdown. Quit is dropdown-only: the pill keeps
+/// it in its context menu.
+struct HeaderButtons: View {
+    let intents: NudgeIntents
+    var includesQuit = false
+
+    var body: some View {
+        HStack(spacing: 8) {
+            IconButton(symbol: "arrow.clockwise", label: "Sync now", role: .secondary) { intents.syncNow() }
+            IconButton(symbol: "gearshape", label: "Settings", role: .secondary, shortcut: "⌘,") { intents.openSettings() }
+                .keyboardShortcut(",", modifiers: .command)
+            if includesQuit {
+                IconButton(symbol: "power", label: "Quit Nudge", role: .secondary, shortcut: "⌘Q") { intents.quit() }
+                    .keyboardShortcut("q", modifiers: .command)
+            }
+        }
+    }
+}
+
 struct MoonChip: View {
     var body: some View {
         Chip(symbol: "moon.fill", text: "off hours")

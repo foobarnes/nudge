@@ -274,8 +274,7 @@ public struct PillView: View {
                     .contentTransition(.numericText(countsDown: true))
                     .motion(Motion.roll, value: state.rows.count)
                 Spacer()
-                IconButton(symbol: "arrow.clockwise", label: "Sync now", role: .secondary) { intents.syncNow() }
-                IconButton(symbol: "gearshape", label: "Settings", role: .secondary) { intents.openSettings() }
+                HeaderButtons(intents: intents)
             }
             .padding(.leading, Tokens.Space.rowH).padding(.trailing, 4).padding(.top, 2).padding(.bottom, 6)
             .foregroundStyle(Tokens.Palette.text)
